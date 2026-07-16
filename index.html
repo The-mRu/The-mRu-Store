@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Tester</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #chat-container { width: 100%; max-width: 500px; height: 80vh; background: white; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; overflow: hidden; }
+        #chat-header { background: #111827; color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+        #header-title { font-weight: bold; }
+        
+        /* Auth Styles */
+        #auth-controls { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+        #login-input { padding: 4px 8px; border-radius: 4px; border: none; outline: none; width: 100px; }
+        .auth-btn { background: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .logout-btn { background: #ef4444; }
+        
+        #messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .message { padding: 10px 14px; border-radius: 18px; max-width: 80%; line-height: 1.4; font-size: 14px; }
+        .user-message { background: #3b82f6; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .bot-message { background: #e5e7eb; color: black; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .system-message { align-self: center; font-size: 12px; color: #6b7280; font-style: italic; }
+        #input-area { display: flex; padding: 16px; border-top: 1px solid #e5e7eb; background: #f9fafb; }
+        #user-input { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; }
+        #send-btn { background: #111827; color: white; border: none; padding: 10px 16px; margin-left: 8px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #send-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div id="chat-container">
+    <div id="chat-header">
+        <span id="header-title">AI Agent</span>
+        <div id="auth-controls">
+            </div>
+    </div>
+    <div id="messages"></div>
+    <div id="input-area">
+        <input type="text" id="user-input" placeholder="Ask about products or tickets..." onkeypress="handleEnter(event)">
+        <button id="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    // 1. Session & User Management
+    let sessionId = localStorage.getItem("chat_session_id");
+    let currentUserId = localStorage.getItem("chat_user_id") || null;
+
+    if (!sessionId) {
+        sessionId = "guest_" + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem("chat_session_id", sessionId);
+    }
+
+    const messagesDiv = document.getElementById("messages");
+    const inputField = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+    const authControls = document.getElementById("auth-controls");
+
+    // Initialize UI
+    updateAuthUI();
+    
+    if (currentUserId) {
+        addMessage(`Welcome back, ${currentUserId}!`, "system-message");
+    } else {
+        addMessage(`Guest Mode (Session: ${sessionId})`, "system-message");
+    }
+
+    // --- AUTHENTICATION LOGIC ---
+    function updateAuthUI() {
+        if (currentUserId) {
+            authControls.innerHTML = `
+                <span>User: ${currentUserId}</span>
+                <button class="auth-btn logout-btn" onclick="logout()">Logout</button>
+            `;
+        } else {
+            authControls.innerHTML = `
+                <input type="text" id="login-input" placeholder="Enter User ID">
+                <button class="auth-btn" onclick="login()">Login</button>
+            `;
+        }
+    }
+
+    function login() {
+        const uid = document.getElementById("login-input").value.trim();
+        if (uid) {
+            currentUserId = uid;
+            localStorage.setItem("chat_user_id", uid);
+            updateAuthUI();
+            addMessage(`Logged in as ${uid}. Sending message will link history!`, "system-message");
+        }
+    }
+
+    function logout() {
+        currentUserId = null;
+        localStorage.removeItem("chat_user_id");
+        
+        // Clear session ID so the next guest gets a fresh start
+        localStorage.removeItem("chat_session_id");
+        
+        // Reload page to reset everything cleanly
+        location.reload(); 
+    }
+
+    // --- CHAT LOGIC ---
+    function addMessage(text, className) {
+        const div = document.createElement("div");
+        div.className = `message ${className}`;
+        div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function handleEnter(event) {
+        if (event.key === "Enter") sendMessage();
+    }
+
+    async function sendMessage() {
+        const text = inputField.value.trim();
+        if (!text) return;
+
+        addMessage(text, "user-message");
+        inputField.value = "";
+        inputField.disabled = true;
+        sendBtn.disabled = true;
+        
+        const loadingId = "loading-" + Date.now();
+        addMessage("Agent is thinking...", "system-message");
+        messagesDiv.lastChild.id = loadingId;
+
+        try {
+            // 2. Pass BOTH session_id and user_id to FastAPI
+            const response = await fetch(`http://127.0.0.1:8000/chat/${sessionId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    message: text, 
+                    user_id: currentUserId // This triggers the backend link logic!
+                }) 
+            });
+
+            const data = await response.json();
+            
+            document.getElementById(loadingId).remove();
+            addMessage(data.reply, "bot-message");
+
+        } catch (error) {
+            document.getElementById(loadingId).remove();
+            addMessage("Error connecting to server. Is FastAPI running?", "system-message");
+            console.error(error);
+        } finally {
+            inputField.disabled = false;
+            sendBtn.disabled = false;
+            inputField.focus();
+        }
+    }
+</script>
+
+</body>
+</html>

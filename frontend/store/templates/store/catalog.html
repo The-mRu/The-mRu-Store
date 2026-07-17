@@ -1,0 +1,22 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-6">Our Products</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    {% for product in products %}
+    <div class="bg-white rounded-lg shadow-md p-4 flex flex-col">
+        <h2 class="text-xl font-semibold mb-2">{{ product.name }}</h2>
+        <p class="text-gray-600 flex-grow">{{ product.description|truncatewords:15 }}</p>
+        <div class="mt-4 flex justify-between items-center">
+            <span class="text-lg font-bold text-green-600">৳{{ product.price }}</span>
+            <span class="text-sm text-gray-500">Stock: {{ product.stock }}</span>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-span-full text-center text-gray-500 py-10">
+        <p>No products found. Is the FastAPI backend running?</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

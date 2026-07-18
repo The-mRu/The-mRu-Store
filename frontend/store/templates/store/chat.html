@@ -1,0 +1,158 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<!-- Include Marked.js to render the AI's markdown responses -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<div class="py-6 px-4 max-w-4xl mx-auto min-h-[85vh] flex flex-col transition-colors duration-300">
+    
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col h-[75vh] sm:h-[80vh] transition-all">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-5 shadow-md z-10 flex items-center gap-3">
+            <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm shadow-inner">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            </div>
+            <div>
+                <h2 class="text-xl font-extrabold tracking-tight">The-mRu-store Assistant</h2>
+                <p class="text-xs text-blue-100 font-medium mt-0.5">Ask about products, stock, or store policies!</p>
+            </div>
+        </div>
+
+        <!-- Chat History Window -->
+        <div id="chat-window" class="flex-grow p-5 overflow-y-auto bg-gray-50 dark:bg-gray-900 flex flex-col gap-6 scroll-smooth">
+            <!-- Initial Greeting -->
+            <div class="flex justify-start animate-fade-in-up">
+                <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-2xl rounded-tl-sm px-5 py-3.5 max-w-[85%] sm:max-w-[75%] shadow-sm font-medium">
+                    Hello! I am the official AI assistant for The-mRu-store. How can I help you today?
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator (Hidden by default) -->
+        <div id="loading-indicator" class="hidden px-6 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 font-medium animate-pulse">
+                <svg class="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Agent is thinking...
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 sm:p-5 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 flex gap-3 z-10">
+            <!-- Django requires a CSRF token for POST requests -->
+            {% csrf_token %}
+            <input type="text" id="chat-input" 
+                class="flex-grow bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 shadow-inner transition-all" 
+                placeholder="Type your message here..."
+                onkeypress="handleKeyPress(event)">
+            
+            <button onclick="sendMessage()" 
+                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-md transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
+                <span class="hidden sm:inline">Send</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Smooth fade in animation for new messages */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up {
+        animation: fadeInUp 0.3s ease-out forwards;
+    }
+</style>
+
+<script>
+    // Get the CSRF token from the hidden input Django rendered
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const chatWindow = document.getElementById('chat-window');
+    const chatInput = document.getElementById('chat-input');
+    const loadingIndicator = document.getElementById('loading-indicator');
+
+    function appendMessage(role, text) {
+        const wrapperDiv = document.createElement('div');
+        wrapperDiv.className = role === 'user' ? 'flex justify-end animate-fade-in-up' : 'flex justify-start animate-fade-in-up';
+
+        const messageDiv = document.createElement('div');
+        
+        // Premium styling for user vs AI bubbles
+        if (role === 'user') {
+            messageDiv.className = 'bg-blue-600 text-white rounded-2xl rounded-tr-sm px-5 py-3.5 max-w-[85%] sm:max-w-[75%] shadow-md text-sm sm:text-base';
+            messageDiv.textContent = text;
+        } else {
+            // Using Typography plugin classes (prose) with dark mode support (dark:prose-invert)
+            messageDiv.className = 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 rounded-2xl rounded-tl-sm px-5 py-3.5 max-w-[85%] sm:max-w-[75%] shadow-sm prose prose-sm sm:prose-base dark:prose-invert';
+            messageDiv.innerHTML = marked.parse(text);
+        }
+
+        wrapperDiv.appendChild(messageDiv);
+        chatWindow.appendChild(wrapperDiv);
+        
+        // Auto-scroll to the bottom smoothly
+        chatWindow.scrollTo({
+            top: chatWindow.scrollHeight,
+            behavior: 'smooth'
+        });
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            sendMessage();
+        }
+    }
+
+    async function sendMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        // 1. Show user message and clear input
+        appendMessage('user', message);
+        chatInput.value = '';
+        chatInput.disabled = true;
+        
+        // 2. Show loading state
+        loadingIndicator.classList.remove('hidden');
+        
+        // Scroll to show loading indicator
+        chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+
+        try {
+            // 3. Send request to your Django proxy view
+            const response = await fetch('/api/chat/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken // Crucial for Django security
+                },
+                body: JSON.stringify({ message: message })
+            });
+
+            const data = await response.json();
+
+            // 4. Hide loading and show AI response
+            loadingIndicator.classList.add('hidden');
+            chatInput.disabled = false;
+            chatInput.focus();
+
+            if (response.ok && data) {
+                // Specifically extract the 'reply' key sent by FastAPI
+                const aiText = data.reply || data.error || "⚠️ Blank response from AI.";
+                appendMessage('ai', aiText);
+            } else {
+                appendMessage('ai', "⚠️ **Error:** Could not reach the AI agent.");
+            }
+        } catch (error) {
+            loadingIndicator.classList.add('hidden');
+            chatInput.disabled = false;
+            appendMessage('ai', "⚠️ **Network error.** Is the FastAPI backend running?");
+        }
+    }
+</script>
+{% endblock %}

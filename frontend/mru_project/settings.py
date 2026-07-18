@@ -116,3 +116,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+
+# Tell Django to store sessions in encrypted cookies instead of a local SQL database
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+
+# Print emails to the console instead of sending real ones (for development)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Force Django to use your custom login route instead of /accounts/login/
+LOGIN_URL = 'login' 
+LOGIN_REDIRECT_URL = 'catalog'

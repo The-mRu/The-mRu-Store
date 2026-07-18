@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from backend.api import products, categories, orders, reviews, support_tickets, inventory, analytics, users, search, chat
+from backend.api import auth, cart, products, categories, orders, reviews, support_tickets, inventory, analytics, users, search, chat
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="The-mRu Store Chatbot API")
@@ -26,6 +26,8 @@ app.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat(AI Agent)"])
+app.include_router(cart.router, prefix="/cart")
+app.include_router(auth.router, prefix="/auth")
 
 @app.get("/")
 def read_root():

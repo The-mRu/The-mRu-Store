@@ -1,0 +1,136 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<div class="py-8 px-4 md:px-8 max-w-7xl mx-auto min-h-screen transition-colors duration-300">
+    
+    <div class="flex flex-col md:flex-row gap-8">
+        
+        <!-- Left Side: Filters Sidebar -->
+        <aside class="w-full md:w-64 lg:w-72 flex-shrink-0">
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 sticky top-24 transition-all">
+                <h3 class="font-extrabold text-gray-900 dark:text-white mb-4 text-lg border-b border-gray-100 dark:border-gray-700 pb-3">Filters</h3>
+                
+                <h4 class="font-bold text-gray-900 dark:text-white mb-3 text-sm">Price</h4>
+                
+                <!-- Preset Links -->
+                <ul class="text-sm space-y-3 text-gray-600 dark:text-gray-400 font-medium">
+                    <li>
+                        <a href="?q={{ query }}&category={{ category_id }}&price=under_500" class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors {% if price_filter == 'under_500' %}text-blue-600 dark:text-blue-400 font-bold{% endif %}">
+                            Under ৳500
+                        </a>
+                    </li>
+                    <li>
+                        <a href="?q={{ query }}&category={{ category_id }}&price=500_2000" class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors {% if price_filter == '500_2000' %}text-blue-600 dark:text-blue-400 font-bold{% endif %}">
+                            ৳500 to ৳2,000
+                        </a>
+                    </li>
+                    <li>
+                        <a href="?q={{ query }}&category={{ category_id }}&price=2000_5000" class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors {% if price_filter == '2000_5000' %}text-blue-600 dark:text-blue-400 font-bold{% endif %}">
+                            ৳2,000 to ৳5,000
+                        </a>
+                    </li>
+                    <li>
+                        <a href="?q={{ query }}&category={{ category_id }}&price=over_5000" class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors {% if price_filter == 'over_5000' %}text-blue-600 dark:text-blue-400 font-bold{% endif %}">
+                            Over ৳5,000
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Custom Price Range Form -->
+                <form method="GET" action="{% url 'search' %}" class="mt-5 flex items-center gap-2">
+                    <!-- Hidden inputs to remember the current text search and category -->
+                    {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+                    {% if category_id %}<input type="hidden" name="category" value="{{ category_id }}">{% endif %}
+                    
+                    <div class="relative flex items-center">
+                        <span class="absolute left-3 text-gray-500 dark:text-gray-400 text-sm">৳</span>
+                        <input type="number" name="min_price" placeholder="Min" value="{{ min_price }}" 
+                               class="w-[76px] pl-7 pr-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm shadow-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white transition-colors">
+                    </div>
+                    
+                    <span class="text-gray-400 dark:text-gray-500 font-medium">-</span>
+                    
+                    <div class="relative flex items-center">
+                        <span class="absolute left-3 text-gray-500 dark:text-gray-400 text-sm">৳</span>
+                        <input type="number" name="max_price" placeholder="Max" value="{{ max_price }}" 
+                               class="w-[76px] pl-7 pr-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm shadow-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white transition-colors">
+                    </div>
+                    
+                    <button type="submit" class="bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600 px-3 py-2 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-200 shadow-sm transition-colors">
+                        Go
+                    </button>
+                </form>
+
+                <!-- Clear Button -->
+                {% if price_filter or min_price or max_price %}
+                <div class="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <a href="?q={{ query }}&category={{ category_id }}" class="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium flex items-center gap-1.5 w-fit transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        Clear price filter
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </aside>
+
+        <!-- Right Side: Search Results -->
+        <div class="flex-grow">
+            
+            <!-- Results Header -->
+            <div class="mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <h1 class="text-2xl font-extrabold text-gray-900 dark:text-white">
+                    {% if result_count > 0 %}
+                        {{ result_count }} result{% if result_count != 1 %}s{% endif %} 
+                        {% if query %}for <span class="text-blue-600 dark:text-blue-400">"{{ query }}"</span>{% endif %}
+                    {% else %}
+                        No results found {% if query %}for <span class="text-blue-600 dark:text-blue-400">"{{ query }}"</span>{% endif %}
+                    {% endif %}
+                </h1>
+            </div>
+
+            <!-- Results Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {% for product in results %}
+                <div class="group relative flex flex-col h-full bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-100 dark:border-gray-700 transition-all hover:shadow-xl">
+                    <!-- Product Image Link -->
+                    <a href="{% url 'product_detail' product.id %}" class="block mb-4 flex-grow">
+                        <div class="h-[200px] bg-gray-50 dark:bg-gray-700 flex items-center justify-center mb-4 rounded-xl overflow-hidden">
+                            <svg class="w-16 h-16 text-gray-300 dark:text-gray-500 transform group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </div>
+                        
+                        <h2 class="text-base font-bold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2 mb-2 transition-colors">
+                            {{ product.name }}
+                        </h2>
+                        
+                        <!-- Star Rating Placeholder -->
+                        <div class="flex items-center text-yellow-400 text-sm mb-3">
+                            ★★★★<span class="text-gray-300 dark:text-gray-600">☆</span> 
+                            <span class="text-blue-600 dark:text-blue-400 font-medium ml-2 text-xs">42</span>
+                        </div>
+
+                        <div class="flex items-start gap-1 mb-1 text-gray-900 dark:text-white">
+                            <span class="text-sm font-bold mt-1 text-gray-500 dark:text-gray-400">৳</span>
+                            <span class="text-2xl font-black">{{ product.price }}</span>
+                        </div>
+                        <div class="text-xs font-medium text-green-600 dark:text-green-400 mb-2">Get it as soon as Tomorrow</div>
+                    </a>
+
+                    <!-- Add to Cart Button (Ghost Style) -->
+                    <button onclick="addToCart('{{ product.id }}')" class="mt-auto w-full bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 hover:border-blue-600 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400 text-sm font-bold py-2.5 rounded-xl shadow-sm transition-all transform hover:-translate-y-0.5">
+                        Add to cart
+                    </button>
+                </div>
+                {% empty %}
+                <div class="col-span-full py-16 text-center bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-50 dark:bg-gray-700 rounded-full mb-6">
+                        <svg class="w-10 h-10 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <p class="text-lg font-medium text-gray-900 dark:text-white mb-2">Try checking your spelling or using more general terms.</p>
+                    <a href="{% url 'catalog' %}" class="text-blue-600 dark:text-blue-400 hover:text-blue-500 hover:underline mt-2 inline-block font-bold transition-colors">Go back to homepage</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

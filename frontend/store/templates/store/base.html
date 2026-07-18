@@ -3,26 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The mRu Store</title>
+    <title>The-mRu-store</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
-    <nav class="bg-blue-600 text-white p-4 shadow-md">
-        <div class="container mx-auto flex justify-between items-center">
-            <a href="/" class="text-xl font-bold">The-mRu-store</a>
-            <div>
-                <a href="/" class="px-3 hover:text-blue-200">Catalog</a>
-                <a href="/chat/" class="px-3 hover:text-blue-200">🤖 AI Assistant</a>
-            </div>
-        </div>
-    </nav>
+<!-- UPDATED: Replaced Amazon background with modern light/dark mode classes -->
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col min-h-screen font-sans text-[14px] transition-colors duration-300">
+    
+    <!-- Top Navbar -->
+    <header>
+        {% include 'store/navbar.html' %}
+    </header>
 
-    <main class="container mx-auto flex-grow p-6">
-        {% block content %}{% endblock %}
+    <!-- Main Content -->
+    <main class="flex-grow w-full max-w-[1500px] mx-auto">
+        {% block content %}
+        {% endblock %}
     </main>
+    
+    <!-- Global UI Components -->
+    {% include 'store/components/spinner.html' %}
+    {% include 'store/components/modal.html' %}
 
-    <footer class="bg-gray-800 text-white text-center p-4 mt-8">
-        <p>&copy; 2026 The mRu Store. Powered by AI.</p>
-    </footer>
+    <!-- Footer -->
+    {% include 'store/footer.html' %}
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-20 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Global E-commerce Logic -->
+    <script>
+        let localCart = JSON.parse(localStorage.getItem('mRuCart')) || [];
+        // Inject Django auth state directly into JS
+        const currentUserId = "{{ request.session.user_id|default:'' }}";
+
+        function updateCartBadge() {
+            const badge = document.getElementById('cart-badge');
+            if (badge) {
+                const totalItems = localCart.reduce((sum, item) => sum + item.quantity, 0);
+                badge.innerText = totalItems;
+            }
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            // UPDATED: Premium Toast Styling matching the new Blue theme
+            toast.className = "bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-6 py-4 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 border-l-4 border-l-blue-600 transform transition-all duration-300 translate-x-full opacity-0 flex items-center gap-3 font-medium pointer-events-auto";
+            
+            toast.innerHTML = `
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            setTimeout(() => toast.classList.remove('translate-x-full', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        // Pull cart from DB when logged in
+        async function fetchCartFromDB() {
+            if (!currentUserId) return; // Stop if guest
+            
+            try {
+                const response = await fetch('/api/cart/sync/');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.items) {
+                        // Overwrite local memory with database truth
+                        localCart = data.items;
+                        localStorage.setItem('mRuCart', JSON.stringify(localCart));
+                        updateCartBadge();
+                        
+                        // If they are on the cart page, redraw it
+                        if (typeof renderCart === 'function') renderCart(); 
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to pull cart from DB", error);
+            }
+        }
+
+        // Push cart to DB after modifying
+        async function pushCartToDB() {
+            if (!currentUserId) return; // Stop if guest
+
+            try {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+                await fetch('/api/cart/sync/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ items: localCart })
+                });
+            } catch (error) {
+                console.error("Failed to push cart to DB", error);
+            }
+        }
+
+        function addToCart(productId) {
+            if(event) event.preventDefault(); 
+            
+            // The Bouncer. If no user ID exists, stop them immediately.
+            if (!currentUserId) {
+                showToast("Please sign in to add items to your cart.");
+                return; // This stops the rest of the code from running
+            }
+            
+            const existingItem = localCart.find(item => item.productId === productId);
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                localCart.push({ productId: productId, quantity: 1 });
+            }
+            
+            localStorage.setItem('mRuCart', JSON.stringify(localCart));
+            updateCartBadge();
+            showToast("Added to Cart");
+            
+            pushCartToDB(); 
+        }
+
+        function buyNow(productId) {
+            if (event) event.preventDefault(); 
+            
+            // 1. Ensure they are logged in
+            if (!currentUserId) {
+                showToast("Please sign in to buy items.");
+                return;
+            }
+            
+            // 2. Save this single item to temporary session storage (NOT the main cart)
+            const singleItem = { productId: productId, quantity: 1 };
+            sessionStorage.setItem('buyNowItem', JSON.stringify(singleItem));
+            
+            // 3. Send them to checkout with the special mode flag
+            window.location.href = "/checkout/?mode=buynow";
+        }
+
+        // Clear the local cart when logging out
+        function handleLogout(event, logoutUrl) {
+            event.preventDefault(); // Stop the link from clicking immediately
+            localStorage.removeItem('mRuCart'); // Wipe the local browser memory
+            window.location.href = logoutUrl; // Send them to Django to destroy the session
+        }
+
+        // When the page loads, update badge and check DB
+        document.addEventListener('DOMContentLoaded', () => {
+            updateCartBadge();
+            fetchCartFromDB();
+        });
+        
+    </script>
+
+    <!-- INJECT CHATBOT COMPONENT HERE -->
+    {% include 'store/chatbot.html' %}
+
 </body>
 </html>

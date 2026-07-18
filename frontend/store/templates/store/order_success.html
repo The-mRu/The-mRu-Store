@@ -1,0 +1,33 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<div class="min-h-[75vh] flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4 transition-colors duration-300">
+    <div class="bg-white dark:bg-gray-800 p-8 sm:p-10 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 max-w-md w-full text-center transition-all transform hover:-translate-y-1 hover:shadow-2xl">
+        
+        <!-- Premium Green Checkmark Icon -->
+        <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+            <svg class="w-10 h-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+        
+        <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white mb-3">Order placed!</h1>
+        
+        <p class="text-gray-500 dark:text-gray-400 mb-8 text-sm leading-relaxed">
+            Thank you for your purchase. A confirmation has been sent to your email, and we are getting your items ready for shipment.
+        </p>
+
+        <div class="space-y-4">
+            <!-- For the future: This could link to their exact order details -->
+            <a href="#" class="block w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold py-3 rounded-xl shadow-sm transition-colors">
+                Review or edit recent orders
+            </a>
+            
+            <!-- Main Call to Action -->
+            <a href="{% url 'catalog' %}" class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5">
+                Continue shopping
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

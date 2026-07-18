@@ -1,0 +1,195 @@
+<!-- Floating Chatbot Widget -->
+<div id="chatbot-container" class="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans transition-colors duration-300">
+    
+    <!-- Chat Window (Hidden by default) -->
+    <div id="chatbot-window" class="hidden w-[90vw] sm:w-80 md:w-96 h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex-col overflow-hidden transition-all transform origin-bottom-right">
+        
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 flex justify-between items-center shadow-md z-10">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm shadow-inner">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                </div>
+                <div>
+                    <h3 class="font-bold text-base leading-tight">AI Assistant</h3>
+                    <p class="text-xs text-blue-100">Online & ready to help</p>
+                </div>
+            </div>
+            <!-- Close Button -->
+            <button onclick="toggleChat()" class="text-blue-100 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <!-- Message Area -->
+        <div id="chatbot-messages" class="flex-grow p-5 overflow-y-auto flex flex-col gap-4 bg-gray-50 dark:bg-gray-900 text-sm scroll-smooth">
+            <!-- Initial AI Greeting (Will be overwritten if history exists) -->
+            <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 p-3.5 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm font-medium animate-fade-in-up">
+                Hello! I am your mRu-store AI assistant. How can I help you find the perfect product today?
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="p-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 z-10">
+            <form id="chatbot-form" class="flex gap-2" onsubmit="handleChatSubmit(event)">
+                <input type="text" id="chatbot-input" placeholder="Ask me anything..." required 
+                    class="flex-grow px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white placeholder-gray-400 shadow-inner transition-all text-sm">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl transition-all transform hover:-translate-y-0.5 shadow-md flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Floating Chat Button (Added ID: chatbot-trigger) -->
+    <button id="chatbot-trigger" onclick="toggleChat()" class="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-all transform hover:-translate-y-1 flex items-center justify-center border-4 border-white dark:border-gray-800 group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <svg class="w-7 h-7 transform group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+    </button>
+</div>
+
+<style>
+    /* Smooth fade in animation for new messages */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up {
+        animation: fadeInUp 0.3s ease-out forwards;
+    }
+</style>
+
+<!-- Chatbot Logic -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const chatMessages = document.getElementById('chatbot-messages');
+        const currentUserId = "{{ request.session.user_id|default:'guest' }}";
+        const savedUserId = sessionStorage.getItem('chatUserId');
+
+        if (savedUserId && savedUserId !== currentUserId) {
+            sessionStorage.removeItem('chatHistory');
+        }
+        
+        sessionStorage.setItem('chatUserId', currentUserId);
+
+        const savedHistory = sessionStorage.getItem('chatHistory');
+        if (savedHistory) {
+            chatMessages.innerHTML = savedHistory;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Check if chat was left open on previous page load
+        const isChatOpen = sessionStorage.getItem('chatOpen');
+        if (isChatOpen === 'true') {
+            const chatWindow = document.getElementById('chatbot-window');
+            const chatTrigger = document.getElementById('chatbot-trigger');
+            
+            chatWindow.classList.remove('hidden');
+            chatWindow.classList.add('flex');
+            chatTrigger.classList.add('hidden'); // Ensure trigger stays hidden across pages
+        }
+    });
+
+    function saveChatHistory() {
+        const chatMessages = document.getElementById('chatbot-messages');
+        sessionStorage.setItem('chatHistory', chatMessages.innerHTML);
+    }
+
+    // UPDATED Toggle Logic: Hides the round button when chat opens
+    function toggleChat() {
+        const chatWindow = document.getElementById('chatbot-window');
+        const chatTrigger = document.getElementById('chatbot-trigger');
+        
+        if (chatWindow.classList.contains('hidden')) {
+            // Open the chat
+            chatWindow.classList.remove('hidden');
+            chatWindow.classList.add('flex');
+            chatTrigger.classList.add('hidden'); // Hide the round button
+            
+            document.getElementById('chatbot-input').focus();
+            sessionStorage.setItem('chatOpen', 'true');
+        } else {
+            // Close the chat
+            chatWindow.classList.add('hidden');
+            chatWindow.classList.remove('flex');
+            chatTrigger.classList.remove('hidden'); // Show the round button
+            
+            sessionStorage.setItem('chatOpen', 'false');
+        }
+    }
+
+    async function handleChatSubmit(event) {
+        event.preventDefault();
+        const inputField = document.getElementById('chatbot-input');
+        const message = inputField.value.trim();
+        if (!message) return;
+
+        const chatMessages = document.getElementById('chatbot-messages');
+
+        const userMsgHTML = `
+            <div class="bg-blue-600 text-white p-3.5 rounded-2xl rounded-tr-sm self-end max-w-[85%] shadow-md animate-fade-in-up">
+                ${message}
+            </div>
+        `;
+        chatMessages.insertAdjacentHTML('beforeend', userMsgHTML);
+        inputField.value = '';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        saveChatHistory(); 
+
+        const typingIndicatorID = 'typing-' + Date.now();
+        const typingHTML = `
+            <div id="${typingIndicatorID}" class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 p-3 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm text-xs font-medium flex items-center gap-2 animate-fade-in-up">
+                <svg class="w-3 h-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                AI is typing...
+            </div>
+        `;
+        chatMessages.insertAdjacentHTML('beforeend', typingHTML);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+            
+            const response = await fetch('/api/chat/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ message: message })
+            });
+            
+            const data = await response.json();
+            document.getElementById(typingIndicatorID).remove();
+
+            let aiText = "Sorry, I couldn't process that.";
+            if (typeof data === 'string') {
+                aiText = data; 
+            } else if (data && typeof data === 'object') {
+                aiText = data.response || data.reply || data.message || data.text || data.answer || JSON.stringify(data);
+            }
+
+            const aiMsgHTML = `
+                <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 p-3.5 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm animate-fade-in-up">
+                    ${aiText}
+                </div>
+            `;
+            chatMessages.insertAdjacentHTML('beforeend', aiMsgHTML);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            saveChatHistory(); 
+
+        } catch (error) {
+            document.getElementById(typingIndicatorID).remove();
+            chatMessages.insertAdjacentHTML('beforeend', `
+                <div class="bg-red-50 dark:bg-red-900/30 border border-red-100 dark:border-red-800 text-red-700 dark:text-red-400 p-3.5 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm font-medium animate-fade-in-up flex items-start gap-2">
+                    <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    Connection error. Please try again.
+                </div>
+            `);
+            saveChatHistory();
+        }
+    }
+</script>

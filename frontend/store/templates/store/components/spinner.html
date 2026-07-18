@@ -1,0 +1,25 @@
+<!-- Global Loading Overlay (Hidden by default) -->
+<div id="global-spinner" class="fixed inset-0 z-[9999] bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm hidden flex-col items-center justify-center transition-opacity">
+    <div class="relative w-16 h-16">
+        <!-- Outer Ring -->
+        <div class="absolute inset-0 rounded-full border-4 border-gray-200 dark:border-gray-700"></div>
+        <!-- Spinning Inner Ring -->
+        <div class="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+    </div>
+    <p class="mt-4 text-sm font-bold text-gray-900 dark:text-white animate-pulse">Processing...</p>
+</div>
+
+<script>
+    // Global functions to easily show/hide the spinner from anywhere
+    function showLoader() {
+        const loader = document.getElementById('global-spinner');
+        loader.classList.remove('hidden');
+        loader.classList.add('flex');
+    }
+
+    function hideLoader() {
+        const loader = document.getElementById('global-spinner');
+        loader.classList.add('hidden');
+        loader.classList.remove('flex');
+    }
+</script>

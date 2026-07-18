@@ -1,0 +1,47 @@
+<!-- Global Confirmation Modal (Hidden by default) -->
+<div id="global-modal" class="fixed inset-0 z-[9999] bg-gray-900/50 backdrop-blur-sm hidden flex-col items-center justify-center transition-opacity" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full mx-4 transform transition-all p-6">
+        <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+            <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        <h3 id="modal-title" class="text-lg font-bold text-center text-gray-900 dark:text-white mb-2">Are you sure?</h3>
+        <p id="modal-message" class="text-sm text-center text-gray-500 dark:text-gray-400 mb-6">This action cannot be undone.</p>
+        
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button onclick="hideModal()" class="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 transition-colors">
+                Cancel
+            </button>
+            <button id="modal-confirm-btn" class="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors">
+                Confirm
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global functions to control the modal
+    function showModal(title, message, onConfirmCallback) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-message').innerText = message;
+        
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        // Clear old event listeners by replacing the node
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        newConfirmBtn.addEventListener('click', () => {
+            onConfirmCallback();
+            hideModal();
+        });
+
+        const modal = document.getElementById('global-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function hideModal() {
+        const modal = document.getElementById('global-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+</script>

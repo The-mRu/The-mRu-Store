@@ -107,10 +107,16 @@
                             {% endif %}
                         </div>
                         <ul class="py-2">
-                            <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">My Profile</a></li>
+                            <!-- <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">My Profile</a></li> -->
+                            <a href="{% url 'dashboard' %}" class="block px-4 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                Profile</a>
                             <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Orders & Returns</a></li>
                             <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Wishlist</a></li>
-                            <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Settings</a></li>
+                            <li>
+                                <a href="{% url 'dashboard' %}?tab=settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    ⚙️ Settings
+                                </a>
+                            </li>
                             <li class="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
                                 <form method="POST" action="{% url 'logout' %}" onsubmit="localStorage.removeItem('mRuCart');">
                                     {% csrf_token %}

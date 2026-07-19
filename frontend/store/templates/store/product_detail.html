@@ -92,13 +92,13 @@
                     In Stock
                 </div>
 
-                <!-- Add to Cart Button (Ghost Style) -->
-                <button onclick="addToCart('{{ product.id }}')" class="w-full bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 hover:border-blue-600 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400 text-sm font-bold py-3.5 rounded-xl shadow-sm transition-all transform hover:-translate-y-0.5 mb-3">
+                <!-- Add to Cart Button: UPDATED TO PASS ALL DATA -->
+                <button onclick="addToCart('{{ product.id }}', 1, '{{ product.name|escapejs }}', '{{ product.price }}')" class="w-full bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 hover:border-blue-600 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400 text-sm font-bold py-3.5 rounded-xl shadow-sm transition-all transform hover:-translate-y-0.5 mb-3">
                     Add to Cart
                 </button>
 
-                <!-- Buy Now Button (Primary Style) -->
-                <button onclick="buyNow('{{ product.id }}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 mb-6">
+                <!-- Buy Now Button: UPDATED TO PASS ALL DATA -->
+                <button onclick="buyNow('{{ product.id }}', 1, '{{ product.name|escapejs }}', '{{ product.price }}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 mb-6">
                     Buy Now
                 </button>
 
@@ -121,4 +121,42 @@
 
     </div>
 </div>
+
+<!-- ADDED: The Javascript logic to save the cart data properly -->
+<script>
+    function addToCart(productId, quantity, productName, productPrice) {
+        let cart = JSON.parse(localStorage.getItem('mRuCart')) || [];
+        
+        let existingItem = cart.find(item => item.id === productId || item.productId === productId);
+        
+        if (existingItem) {
+            existingItem.quantity += parseInt(quantity);
+        } else {
+            cart.push({
+                id: productId,             
+                productId: productId, 
+                quantity: parseInt(quantity),
+                name: productName,         
+                price: parseFloat(productPrice) || 0 
+            });
+        }
+        
+        localStorage.setItem('mRuCart', JSON.stringify(cart));
+        alert(`${productName} added to cart!`);
+    }
+
+    function buyNow(productId, quantity, productName, productPrice) {
+        const item = {
+            id: productId,
+            productId: productId,
+            quantity: parseInt(quantity),
+            name: productName,         
+            price: parseFloat(productPrice) || 0 
+        };
+        
+        sessionStorage.setItem('buyNowItem', JSON.stringify(item));
+        window.location.href = '/checkout/?mode=buynow';
+    }
+</script>
+
 {% endblock %}

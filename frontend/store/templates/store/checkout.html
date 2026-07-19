@@ -4,10 +4,16 @@
 <div class="py-12 px-4 max-w-[1200px] mx-auto transition-colors duration-300">
     <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white mb-8">Checkout</h1>
 
+    <script id="product-data" type="application/json">
+        {{ products_json|safe }}
+    </script>
+
     <div class="flex flex-col lg:flex-row gap-8">
         
-        <!-- Left Column: Shipping Details -->
+        <!-- Left Column: Shipping & Payment ONLY -->
         <div class="flex-grow space-y-8">
+            
+            <!-- Step 1: Shipping Details -->
             <div class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 transition-all">
                 <div class="flex items-center gap-3 mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
                     <span class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold">1</span>
@@ -15,6 +21,7 @@
                 </div>
                 
                 <form id="checkout-form" class="space-y-5">
+                    {% csrf_token %}
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full name</label>
                         <input type="text" id="fullName" required class="appearance-none block w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white transition-colors">
@@ -44,6 +51,7 @@
                 </form>
             </div>
             
+            <!-- Step 2: Payment Method -->
             <div class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 transition-all">
                 <div class="flex items-center gap-3 mb-4">
                     <span class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold">2</span>
@@ -58,28 +66,25 @@
             </div>
         </div>
 
-        <!-- Right Column: Order Summary -->
-        <div class="w-full lg:w-[380px] flex-shrink-0">
+        <!-- Right Column: Integrated Order Summary -->
+        <div class="w-full lg:w-[400px] flex-shrink-0">
             <div class="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 sticky top-24 transition-all">
                 
-                <button onclick="submitOrder()" class="w-full flex justify-center items-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 mb-4">
-                    Place your order
-                </button>
-                
-                <p class="text-xs text-center text-gray-500 dark:text-gray-400 mb-6 border-b border-gray-100 dark:border-gray-700 pb-6 leading-relaxed">
-                    By placing your order, you agree to The-mRu-store's <a href="#" class="text-blue-600 dark:text-blue-400 hover:underline">privacy notice</a> and <a href="#" class="text-blue-600 dark:text-blue-400 hover:underline">conditions of use</a>.
-                </p>
-
                 <h3 class="font-bold text-xl text-gray-900 dark:text-white mb-6">Order Summary</h3>
+
+                <!-- Scrollable Mini-Cart inside the Summary -->
+                <div id="checkout-items-container" class="max-h-[250px] overflow-y-auto pr-2 mb-6 border-b border-gray-100 dark:border-gray-700 pb-4 divide-y divide-gray-100 dark:divide-gray-700">
+                    <!-- JavaScript will inject the compact product list here -->
+                </div>
                 
-                <div class="space-y-4 text-sm text-gray-600 dark:text-gray-400 font-medium">
+                <div class="space-y-4 text-sm text-gray-600 dark:text-gray-400 font-medium mb-6">
                     <div class="flex justify-between items-center">
                         <span>Items (<span id="checkout-item-count">0</span>):</span>
                         <span class="text-gray-900 dark:text-white">৳<span id="checkout-items-total">0.00</span></span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span>Shipping & handling:</span>
-                        <span class="text-gray-900 dark:text-white">৳<span id="checkout-shipping">120.00</span></span>
+                        <span class="text-gray-900 dark:text-white">৳<span id="checkout-shipping">0.00</span></span>
                     </div>
                     
                     <div class="border-t border-gray-100 dark:border-gray-700 pt-4 mt-4 flex justify-between items-center font-black text-xl text-gray-900 dark:text-white">
@@ -87,50 +92,149 @@
                         <span class="text-blue-600 dark:text-blue-400">৳<span id="checkout-final-total">0.00</span></span>
                     </div>
                 </div>
+
+                <p class="text-[10px] text-center text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+                    By placing your order, you agree to The-mRu-store's <a href="#" class="text-blue-600 dark:text-blue-400 hover:underline">privacy notice</a> and <a href="#" class="text-blue-600 dark:text-blue-400 hover:underline">conditions of use</a>.
+                </p>
+
+                <button onclick="submitOrder()" class="w-full flex justify-center items-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3.5 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5">
+                    Place your order
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // We create a global variable for this page to track what we are actually buying
+    // Global variables
     let checkoutItems = []; 
     let isBuyNowMode = false;
+    let productMap = {};
+
+    // A robust helper function to force messy strings into clean numbers
+    function cleanPrice(priceRaw) {
+        if (!priceRaw) return 0;
+        // Strip out anything that isn't a number or a decimal point
+        const cleanString = String(priceRaw).replace(/[^0-9.]/g, '');
+        return parseFloat(cleanString) || 0;
+    }
+
+    function loadProductMap() {
+        const productDataNode = document.getElementById('product-data');
+        if (!productDataNode) return {};
+
+        try {
+            return JSON.parse(productDataNode.textContent || '{}');
+        } catch (error) {
+            console.error('Failed to parse product catalog for checkout', error);
+            return {};
+        }
+    }
+
+    function normalizeCheckoutItem(item) {
+        const productId = item.productId || item.id || '';
+        const product = productMap[productId] || {};
+
+        return {
+            id: item.id || productId,
+            productId: productId,
+            quantity: parseInt(item.quantity, 10) || 1,
+            name: item.name || item.title || item.product_name || item.productName || product.name || 'Product',
+            price: cleanPrice(item.price || item.amount || item.cost || item.unit_price || item.current_price || product.price || 0)
+        };
+    }
 
     document.addEventListener('DOMContentLoaded', async () => {
+        productMap = loadProductMap();
+
         setTimeout(() => {
-            // 1. Check if we are in "Buy Now" mode
             const urlParams = new URLSearchParams(window.location.search);
             isBuyNowMode = (urlParams.get('mode') === 'buynow');
 
             if (isBuyNowMode) {
-                // Pull the single item from session storage
                 const buyNowData = JSON.parse(sessionStorage.getItem('buyNowItem'));
                 if (buyNowData) {
-                    checkoutItems = [buyNowData];
+                    checkoutItems = [normalizeCheckoutItem(buyNowData)];
                 } else {
-                    checkoutItems = localCart; // Fallback just in case
+                    checkoutItems = (typeof localCart !== 'undefined' ? localCart : []).map(normalizeCheckoutItem); 
                 }
             } else {
-                // Normal Cart Checkout
-                checkoutItems = localCart;
+                const storedItems = typeof localCart !== 'undefined' ? localCart : (JSON.parse(localStorage.getItem('mRuCart')) || []);
+                checkoutItems = storedItems.map(normalizeCheckoutItem);
             }
 
-            // 2. Calculate totals based ONLY on checkoutItems
-            let itemTotalCount = 0;
-            let itemTotalPrice = 0;
-            const shippingCost = 120.00;
-
-            checkoutItems.forEach(item => {
-                itemTotalCount += item.quantity;
-                itemTotalPrice += (item.quantity * 500); // We will update this with real pricing next!
-            });
-
-            document.getElementById('checkout-item-count').innerText = itemTotalCount;
-            document.getElementById('checkout-items-total').innerText = itemTotalPrice.toFixed(2);
-            document.getElementById('checkout-final-total').innerText = (itemTotalPrice + shippingCost).toFixed(2);
+            updateCheckoutUI();
         }, 100);
     });
+
+    function updateCheckoutUI() {
+        let itemTotalCount = 0;
+        let itemTotalPrice = 0;
+        const shippingCost = 120.00;
+        const container = document.getElementById('checkout-items-container');
+
+        if (checkoutItems.length === 0) {
+            container.innerHTML = '<p class="py-4 text-xs text-gray-500 text-center">Your checkout list is empty.</p>';
+        } else {
+            // Build the Compact Mini-Cart HTML
+            container.innerHTML = checkoutItems.map(item => {
+                const price = cleanPrice(item.price);
+                const itemSubtotal = price * item.quantity;
+                
+                return `
+                <div class="flex justify-between items-start py-3 first:pt-0">
+                    <div class="flex-grow pr-3">
+                        <h4 class="text-[13px] font-bold text-gray-900 dark:text-white leading-tight line-clamp-2">${item.name}</h4>
+                        <div class="flex items-center gap-3 mt-1.5">
+                            <span class="text-[11px] text-gray-500 font-medium">Qty: ${item.quantity}</span>
+                            <button type="button" onclick="removeCheckoutItem('${item.id}')" class="text-[10px] font-bold text-red-500 hover:text-red-700 transition-colors cursor-pointer">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                    <div class="font-black text-sm text-gray-900 dark:text-white flex-shrink-0">
+                        ৳${itemSubtotal.toFixed(2)}
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // THE FIX: Do the same safe-check for the math calculation
+        checkoutItems.forEach(item => {
+            itemTotalCount += item.quantity;
+            itemTotalPrice += (item.quantity * cleanPrice(item.price)); 
+        });
+
+        const finalShipping = itemTotalCount > 0 ? shippingCost : 0;
+
+        // Update the DOM totals
+        document.getElementById('checkout-item-count').innerText = itemTotalCount;
+        document.getElementById('checkout-items-total').innerText = itemTotalPrice.toFixed(2);
+        document.getElementById('checkout-shipping').innerText = finalShipping.toFixed(2);
+        document.getElementById('checkout-final-total').innerText = (itemTotalPrice + finalShipping).toFixed(2);
+    }
+    
+    function removeCheckoutItem(productId) {
+        checkoutItems = checkoutItems.filter(item => item.id !== productId);
+        
+        if (isBuyNowMode) {
+            sessionStorage.removeItem('buyNowItem');
+        } else {
+            // Check if localCart is globally defined in your base layout
+            if (typeof localCart !== 'undefined') {
+                localCart = checkoutItems.map(item => ({
+                    productId: item.productId,
+                    quantity: item.quantity,
+                    name: item.name,
+                    price: item.price
+                }));
+            }
+            localStorage.setItem('mRuCart', JSON.stringify(localCart));
+        }
+        
+        updateCheckoutUI();
+    }
 
     async function submitOrder() {
         const form = document.getElementById('checkout-form');
@@ -141,7 +245,7 @@
         }
         
         if (checkoutItems.length === 0) {
-            showToast("No items to checkout!");
+            alert("No items to checkout!");
             return;
         }
 
@@ -162,30 +266,33 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify({
-                    items: checkoutItems, // Send the specific items, not necessarily the whole cart
+                    items: checkoutItems.map(item => ({
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        name: item.name,
+                        price: item.price
+                    })), 
                     shipping: shippingData,
                     total: finalTotal
                 })
             });
 
             if (response.ok) {
-                // 3. Carefully clear the correct memory bank
                 if (isBuyNowMode) {
                     sessionStorage.removeItem('buyNowItem');
-                    // We DO NOT wipe localCart here, so their saved items are safe!
                 } else {
-                    localCart = [];
+                    if (typeof localCart !== 'undefined') localCart = [];
                     localStorage.removeItem('mRuCart');
                 }
-                
                 window.location.href = "{% url 'order_success' %}";
             } else {
-                showToast("Failed to process your order.");
+                alert("Failed to process your order.");
             }
         } catch (error) {
             console.error("Order processing error:", error);
-            showToast("Server error. Please try again later.");
+            alert("Server error. Please try again later.");
         }
     }
 </script>

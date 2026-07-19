@@ -51,7 +51,7 @@ async def place_order(order: OrderRequest):
     # 1. Create the order document
     order_data = {
         "order_id": str(uuid.uuid4()),
-        "user_id": order.user_id,
+        "userId": order.user_id,
         "items": order.items,
         "shipping": order.shipping,
         "total": order.total,

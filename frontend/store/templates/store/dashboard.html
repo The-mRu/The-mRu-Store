@@ -1,0 +1,202 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<div
+    class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 font-sans text-gray-900 dark:text-white transition-colors duration-300">
+    <div class="flex flex-col md:flex-row gap-8">
+
+        <!-- SIDEBAR NAVIGATION PANEL -->
+        <aside class="w-full md:w-64 flex-shrink-0">
+            <div
+                class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 shadow-xl sticky top-6">
+                <div class="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
+                    <div
+                        class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-white text-xl shadow-md">
+                        {{ user_name|slice:":1"|upper }}
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-base leading-tight">Hello, {{ user_name }}</h2>
+                        <p class="text-xs text-gray-400 dark:text-gray-500">Manage your profile updates</p>
+                    </div>
+                </div>
+
+                <nav class="flex flex-col gap-1">
+                    <a href="?tab=profile"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all {% if active_tab == 'profile' %} bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 {% else %} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 {% endif %}">
+                        📊 Dashboard
+                    </a>
+                    <!-- <a href="?tab=addresses" class="...">📍 Address Book</a> -->
+                    <a href="{% url 'order_history' %}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
+                        <span>📦</span>
+                        <span class="font-bold">Order History</span>
+                    </a>
+                    <!-- <a href="?tab=notifications" class="...">🔔 Notifications</a> -->
+                    <a href="?tab=settings"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all relative {% if active_tab == 'settings' %} bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 {% else %} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 {% endif %}">
+                        ⚙️ Settings
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- MAIN TABS CONTAINER LAYER -->
+        <main class="flex-grow">
+            <div
+                class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 md:p-8 shadow-xl min-h-[500px]">
+
+                <!-- PROFILE TAB -->
+                {% if active_tab == 'profile' %}
+                <div>
+                    <h3 class="text-xl font-black mb-1">Account Overview</h3>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mb-8">Quick snapshot of your store activity
+                        metrics</p>
+
+                    <!-- SUMMARY METRIC CARDS -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <!-- Card 1: Total Orders -->
+                        <div
+                            class="bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Total
+                                    Orders</span>
+                                <span class="text-xl">📦</span>
+                            </div>
+                            <h4 class="text-2xl font-black text-gray-900 dark:text-white">{{ total_orders|default:"0" }}
+                            </h4>
+                            <p class="text-[11px] text-gray-400 mt-1">Lifetime purchases</p>
+                        </div>
+
+                        <!-- Card 2: Cart Items -->
+                        <div
+                            class="bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Cart Items</span>
+                                <span class="text-xl">🛒</span>
+                            </div>
+                            <h4 id="dashboard-cart-count" class="text-2xl font-black text-gray-900 dark:text-white">0
+                            </h4>
+                            <p class="text-[11px] text-gray-400 mt-1">Ready for checkout</p>
+                        </div>
+
+                        <!-- Card 3: Tickets -->
+                        <div
+                            class="bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Active
+                                    Tickets</span>
+                                <span class="text-xl">🎫</span>
+                            </div>
+                            <h4 class="text-2xl font-black text-gray-900 dark:text-white">{{ active_tickets|default:"0"}}</h4>
+                            <p class="text-[11px] text-gray-400 mt-1">Open help requests</p>
+                        </div>
+
+                        <!-- Card 4: Total Saved -->
+                        <div
+                            class="bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Total
+                                    Saved</span>
+                                <span class="text-xl">৳</span>
+                            </div>
+                            <h4 class="text-2xl font-black text-blue-600 dark:text-blue-400">৳0.00</h4>
+                            <p class="text-[11px] text-gray-400 mt-1">Promo discounts used</p>
+                        </div>
+                    </div>
+
+                    <!-- RECENT ORDERS SECTION -->
+                    <div class="mb-8">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-extrabold text-gray-400 uppercase tracking-wider text-sm">Recent Orders</h3>
+                            <a href="{% url 'order_history' %}"
+                                class="text-sm font-bold text-blue-500 hover:text-blue-400 transition-colors">
+                                View All
+                            </a>
+                        </div>
+                        <div
+                            class="overflow-x-auto bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr
+                                        class="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                        <th class="p-4">Order ID</th>
+                                        <th class="p-4">Order Date</th>
+                                        <th class="p-4">Items</th>
+                                        <th class="p-4">Total Amount</th>
+                                        <th class="p-4">Status</th>
+                                        <th class="p-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-xs font-medium">
+                                    {% for order in recent_orders %}
+                                    <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 transition-colors">
+                                        <td class="p-4 font-bold text-blue-600 dark:text-blue-400">
+                                            #{{ order.string_id }}
+                                        </td>
+                                        <td class="p-4 text-gray-500">{{ order.created_at|date:"M d, Y" }}</td>
+                                        <td class="p-4 text-gray-500">{{ order.item_count }} items</td>
+                                        <td class="p-4 font-bold">৳{{ order.total }}</td>
+                                        <td class="p-4">
+                                            <span
+                                                class="px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase 
+                                                {% if order.status == 'Pending' %} bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400
+                                                {% elif order.status == 'Processing' %} bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                                                {% elif order.status == 'Cancelled' %} bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
+                                                {% else %} bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 {% endif %}">
+                                                {{ order.status }}
+                                            </span>
+                                        </td>
+                                        <td class="p-4 text-right">
+                                            {% if order.string_id %}
+                                            <a href="{% url 'order_detail' order.string_id %}"
+                                                class="inline-block px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                Details
+                                            </a>
+                                            {% else %}
+                                            <span class="text-xs text-red-500 font-bold">Invalid ID</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="6" class="p-8 text-center text-gray-400">No recent orders found.
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SETTINGS TAB (NEW) -->
+                {% elif active_tab == 'settings' %}
+                    {% include 'store/settings.html' %}
+
+                {% endif %}
+                <!-- End of tab conditional -->
+
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 1. Pull the exact cart data we saved in the browser memory earlier
+        let cart = JSON.parse(localStorage.getItem('mRuCart')) || [];
+        
+        // 2. Add up all the quantities
+        let totalItems = 0;
+        cart.forEach(item => {
+            totalItems += parseInt(item.quantity) || 0;
+        });
+        
+        // 3. Inject that total number directly into the new dashboard card
+        const cartCountElement = document.getElementById('dashboard-cart-count');
+        if (cartCountElement) {
+            cartCountElement.innerText = totalItems;
+        }
+    });
+</script>
+{% endblock %}

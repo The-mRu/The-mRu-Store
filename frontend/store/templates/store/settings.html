@@ -1,0 +1,293 @@
+<!-- store/templates/store/settings.html -->
+<div class="space-y-8">
+    <!-- Settings Header -->
+    <div class="pb-6 border-b border-gray-100 dark:border-gray-700">
+        <h3 class="text-xl font-black mb-1">⚙️ Settings</h3>
+        <p class="text-xs text-gray-400 dark:text-gray-500">Manage your personal information and addresses</p>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- 1. PERSONAL INFORMATION FORM                  -->
+    <!-- ============================================ -->
+    <section>
+        <h4 class="font-bold text-sm text-gray-600 dark:text-gray-300 mb-4">Personal Information</h4>
+        <form class="p-6 space-y-8 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700"
+              action="{% url 'dashboard' %}?tab=settings" 
+              method="POST"
+              enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="update_profile">
+
+            <!-- Profile Picture Upload -->
+            <div class="flex items-center gap-6">
+                <div class="relative w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-700 border-4 border-white dark:border-gray-800 shadow-lg overflow-hidden group">
+                    <!-- ADDED id="profileImagePreview" -->
+                    <img id="profileImagePreview"
+                         src="{% if profile.profileImage %}{{ profile.profileImage }}{% else %}https://ui-avatars.com/api/?name={{ user_name }}&background=2563EB&color=fff{% endif %}" 
+                         alt="Profile" 
+                         class="w-full h-full object-cover">
+                    <div onclick="document.getElementById('profile_image_input').click()" 
+                         class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                        <span class="text-white text-xl">📷</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex gap-3 mb-2">
+                        <!-- ADDED onchange="previewProfileImage(this)" -->
+                        <input type="file" id="profile_image_input" name="profile_image" 
+                               accept="image/png, image/jpeg, image/gif" class="hidden"
+                               onchange="previewProfileImage(this)">
+                        <button type="button" 
+                                onclick="document.getElementById('profile_image_input').click()" 
+                                class="px-4 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg text-sm font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                            Change Picture
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">JPG, GIF or PNG. Max size of 2MB.</p>
+                </div>
+            </div>
+
+            <!-- Personal Info Fields -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">Full Name</label>
+                    <input type="text" name="full_name" value="{{ profile.name|default:user_name }}"
+                           class="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">Email Address</label>
+                    <input type="email" name="email" value="{{ profile.email }}" disabled
+                           class="w-full px-4 py-3 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-xl opacity-70 cursor-not-allowed">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">Phone Number</label>
+                    <input type="tel" name="phone" value="{{ profile.phone|default:'' }}"
+                           class="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-2">Date of Birth</label>
+                    <input type="date" name="dob" value="{{ profile.dateOfBirth|default:'' }}"
+                           class="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-gray-500 mb-2">Gender</label>
+                    <select name="gender"
+                            class="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+                        <option value="" {% if not profile.gender %}selected{% endif %}>Select Gender</option>
+                        <option value="Male" {% if profile.gender == 'Male' %}selected{% endif %}>Male</option>
+                        <option value="Female" {% if profile.gender == 'Female' %}selected{% endif %}>Female</option>
+                        <option value="Other" {% if profile.gender == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button type="submit"
+                        class="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200">
+                    Save Profile
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- 2. ADDRESS MANAGEMENT                        -->
+    <!-- ============================================ -->
+    <section>
+        <div class="flex justify-between items-center mb-4">
+            <h4 class="font-bold text-sm text-gray-600 dark:text-gray-300">Saved Addresses</h4>
+            <button onclick="openAddModal()"
+                    class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-1">
+                <span>+</span> Add New
+            </button>
+        </div>
+
+        <!-- Dynamic Address Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% if addresses %}
+                {% for address in addresses %}
+                    <div class="relative p-5 rounded-2xl border transition-all 
+                        {% if address.isDefault %} border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/10 dark:border-blue-500 
+                        {% else %} border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 {% endif %}">
+                        
+                        {% if address.isDefault %}
+                            <span class="absolute top-4 right-4 bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">Default</span>
+                        {% endif %}
+                        
+                        <h4 class="font-bold text-gray-900 dark:text-white mb-1">{{ address.fullName }}</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">{{ address.phone }}</p>
+                        
+                        <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                            {{ address.street }}<br>
+                            {{ address.area }}<br>
+                            {{ address.city }}, {{ address.postalCode }}
+                        </p>
+                        
+                        <div class="flex gap-3 border-t pt-4 {% if address.isDefault %} border-blue-200 dark:border-blue-800/50 {% else %} border-gray-100 dark:border-gray-700 {% endif %}">
+                            <button onclick="openEditModal(
+                                '{{ address.id }}',
+                                '{{ address.fullName|escapejs }}',
+                                '{{ address.phone|escapejs }}',
+                                '{{ address.street|escapejs }}',
+                                '{{ address.area|escapejs }}',
+                                '{{ address.city|escapejs }}',
+                                '{{ address.postalCode|escapejs }}',
+                                '{{ address.isDefault|yesno:"true,false" }}'
+                            )" class="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                Edit
+                            </button>
+
+                            <form method="POST" action="{% url 'dashboard' %}?tab=settings"
+                                  onsubmit="return confirm('Are you sure you want to delete this address?');">
+                                {% csrf_token %}
+                                <input type="hidden" name="form_type" value="delete_address">
+                                <input type="hidden" name="address_id" value="{{ address.id }}">
+                                <button type="submit" class="text-sm font-bold text-red-500 hover:text-red-600 ml-auto">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-span-2 text-center py-8">
+                    <p class="text-gray-500 dark:text-gray-400">You haven't saved any addresses yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<!-- ============================================ -->
+<!-- 3. MODAL – Add / Edit Address                -->
+<!-- ============================================ -->
+<div id="addressModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden transition-opacity">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700">
+            <h3 id="modalTitle" class="text-lg font-black">Add New Address</h3>
+            <button onclick="closeModal()"
+                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+        </div>
+
+        <form id="addressForm" action="{% url 'dashboard' %}?tab=settings" method="POST" class="p-6 space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" id="formType" value="add_address">
+            <input type="hidden" name="address_id" id="addressId" value="">
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Full Name</label>
+                    <input type="text" name="address_name" id="edit_fullName" required
+                           class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Phone Number</label>
+                    <input type="text" name="address_phone" id="edit_phone" required
+                           class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Street Address</label>
+                    <input type="text" name="street" id="edit_street" required
+                           class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Area / Division</label>
+                    <input type="text" name="area" id="edit_area" required
+                           class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">City</label>
+                    <input type="text" name="city" id="edit_city" required
+                           class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Postal Code</label>
+                    <input type="text" name="postal_code" id="edit_postalCode" required
+                           class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+            </div>
+
+            <label class="flex items-center gap-2 mt-4 cursor-pointer">
+                <input type="checkbox" name="is_default" id="edit_isDefault" class="rounded text-blue-600 bg-gray-100 border-gray-300 dark:border-gray-600">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Set as default shipping address</span>
+            </label>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <button type="button" onclick="closeModal()"
+                        class="px-5 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-bold rounded-xl transition-colors">
+                    Cancel
+                </button>
+                <button type="submit" id="submitBtn"
+                        class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200">
+                    Add Address
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- 4. JAVASCRIPT                               -->
+<!-- ============================================ -->
+<script>
+    // --- Profile Picture Preview ---
+    function previewProfileImage(input) {
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('profileImagePreview').src = e.target.result;
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    // --- Modal logic (unchanged) ---
+    const modal = document.getElementById('addressModal');
+    const form = document.getElementById('addressForm');
+    const formType = document.getElementById('formType');
+    const addressId = document.getElementById('addressId');
+    const modalTitle = document.getElementById('modalTitle');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function openAddModal() {
+        form.reset();
+        formType.value = 'add_address';
+        addressId.value = '';
+        modalTitle.textContent = 'Add New Address';
+        submitBtn.textContent = 'Add Address';
+        document.getElementById('edit_isDefault').checked = false;
+        modal.classList.remove('hidden');
+    }
+
+    function openEditModal(id, fullName, phone, street, area, city, postalCode, isDefault) {
+        document.getElementById('edit_fullName').value = fullName;
+        document.getElementById('edit_phone').value = phone;
+        document.getElementById('edit_street').value = street;
+        document.getElementById('edit_area').value = area;
+        document.getElementById('edit_city').value = city;
+        document.getElementById('edit_postalCode').value = postalCode;
+        document.getElementById('edit_isDefault').checked = (isDefault === 'true');
+        formType.value = 'edit_address';
+        addressId.value = id;
+        modalTitle.textContent = 'Edit Address';
+        submitBtn.textContent = 'Update Address';
+        modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        setTimeout(() => {
+            formType.value = 'add_address';
+            addressId.value = '';
+            modalTitle.textContent = 'Add New Address';
+            submitBtn.textContent = 'Add Address';
+            form.reset();
+        }, 200);
+    }
+
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeModal();
+        }
+    });
+</script>

@@ -1,0 +1,142 @@
+{% extends 'store/base.html' %}
+
+{% block content %}
+<div class="py-12 px-4 max-w-[1200px] mx-auto transition-colors duration-300">
+    
+    <div class="flex flex-col lg:flex-row gap-8">
+        
+        <!-- ========================================== -->
+        <!-- LEFT SIDEBAR (Matches Dashboard exactly) -->
+        <!-- ========================================== -->
+        <div class="w-full lg:w-1/4 flex-shrink-0">
+            <div>
+                
+                <!-- SIDEBAR NAVIGATION PANEL -->
+        <aside class="w-full md:w-64 flex-shrink-0">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-6 shadow-xl sticky top-6">
+                <div class="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
+                    <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center font-black text-white text-xl shadow-md">
+                        {{ user_name|slice:":1"|upper }}
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-base leading-tight">Hello,{{ user_name }}</h2>
+                        <p class="text-xs text-gray-400 dark:text-gray-500">Manage your profile updates</p>
+                    </div>
+                </div>
+                
+                <nav class="flex flex-col gap-1">
+                    <a href="{% url 'dashboard' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all {% if active_tab == 'profile' %} bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 {% else %} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 {% endif %}">
+                        📊 Dashboard
+                    </a>
+                    <!-- <a href="?tab=addresses" class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all {% if active_tab == 'addresses' %} bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 {% else %} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 {% endif %}">
+                        📍 Address Book
+                    </a> -->
+                    <!-- Inside your sidebar HTML -->
+<a href="{% url 'order_history' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
+    <span>📦</span> <!-- Replace with your actual icon -->
+    <span class="font-bold">Order History</span>
+</a>
+                    <!-- <a href="?tab=notifications" class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all relative {% if active_tab == 'notifications' %} bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 {% else %} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 {% endif %}">
+                        🔔 Notifications
+                    </a> -->
+                    <a href="{% url 'dashboard' %}?tab=settings" 
+                    class="flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all relative {% if active_tab == 'settings' %} bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 {% else %} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 {% endif %}">
+                    ⚙️ Settings
+                </a>
+
+                </nav>
+            </div>
+        </aside>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- RIGHT CONTENT AREA (Full Order History)    -->
+        <!-- ========================================== -->
+        <div class="flex-grow space-y-8">
+            
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-extrabold text-gray-900 dark:text-gray-300 uppercase tracking-wider">ALL ORDERS</h2>
+                <a href="{% url 'catalog' %}" class="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline">Continue Shopping &rarr;</a>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all">
+                {% if orders %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 font-bold">
+                                    <th class="p-5">Order ID</th>
+                                    <th class="p-5">Order Date</th>
+                                    <th class="p-5">Items</th>
+                                    <th class="p-5">Total Amount</th>
+                                    <th class="p-5">Status</th>
+                                    <th class="p-5 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                {% for order in orders %}
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                    
+                                    <td class="p-5">
+                                        <span class="font-bold text-blue-600 dark:text-blue-400">#{{ order.string_id }}</span>
+                                    </td>
+                                    
+                                    <td class="p-5 text-sm text-gray-600 dark:text-gray-300 font-medium">
+                                        {{ order.created_at|date:"M d, Y"|default:"Recently" }}
+                                    </td>
+                                    
+                                    
+                                    <td class="p-5 text-sm text-gray-600 dark:text-gray-300 font-medium truncate max-w-[150px]">
+    {% if order.item_count == 1 %}
+        {{ order.items.0.name|default:order.items.0.productId }}
+    {% else %}
+        {{ order.item_count }} items
+    {% endif %}
+</td>
+                                    
+                                    <td class="p-5 font-black text-gray-900 dark:text-white">
+                                        ৳{{ order.total|floatformat:2 }}
+                                    </td>
+                                    
+                                    <td class="p-5">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black tracking-wider uppercase bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                                            {{ order.status|default:"PROCESSING" }}
+                                        </span>
+                                    </td>
+                                    
+                                    <td class="p-4 text-right">
+                                            {% if order.string_id %}
+                                            <a href="{% url 'order_detail' order.string_id %}"
+                                                class="inline-block px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                Details
+                                            </a>
+                                            {% else %}
+                                            <!-- Fallback if the database has a broken record -->
+                                            <span class="text-xs text-red-500 font-bold">Invalid ID</span>
+                                            {% endif %}
+                                        </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <!-- Empty State -->
+                    <div class="py-20 px-6 text-center flex flex-col items-center">
+                        <div class="w-20 h-20 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-6">
+                            <svg class="w-10 h-10 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No orders found</h3>
+                        <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-8">You haven't placed any orders yet. When you do, they will show up here so you can track their status.</p>
+                        <a href="{% url 'catalog' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5">
+                            Start Shopping
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+    </div>
+</div>
+{% endblock %}

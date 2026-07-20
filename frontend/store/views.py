@@ -889,11 +889,12 @@ def shop_view(request):
 
     # ---- Sorting ----
     if sort == 'newest':
-        products.sort(key=lambda p: p.get('createdAt', ''), reverse=True)
+        # FIX: Wrapped in str() to prevent mixed-type crashes
+        products.sort(key=lambda p: str(p.get('createdAt', '')), reverse=True)
     elif sort == 'price_low':
-        products.sort(key=lambda p: p.get('price', 0))
+        products.sort(key=lambda p: float(p.get('price', 0)))
     elif sort == 'price_high':
-        products.sort(key=lambda p: p.get('price', 0), reverse=True)
+        products.sort(key=lambda p: float(p.get('price', 0)), reverse=True)
 
     # ---- Pagination ----
     paginator = Paginator(products, 12)
@@ -908,6 +909,7 @@ def shop_view(request):
         'search_query': search_query,
     }
     return render(request, 'store/shop.html', context)
+
 
 def admin_dashboard_view(request):
     # SECURITY: Check for admin_id instead of user_id
@@ -1075,3 +1077,169 @@ def admin_add_product_view(request):
         return redirect('admin_products')
 
     return render(request, 'store/admin/add_product.html')
+
+
+from bson.objectid import ObjectId
+
+def admin_edit_product_view(request, product_id):
+    # 1. Security Check
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+
+    # 2. Safely find the product in MongoDB (handling both _id and custom id)
+    try:
+        # First, try treating product_id as a MongoDB ObjectId
+        query = {"_id": ObjectId(product_id)}
+    except:
+        # If it's a custom string ID, fallback to searching the 'id' field
+        query = {"id": product_id}
+
+    product = db['Products'].find_one(query)
+    
+    if not product:
+        messages.error(request, "Product not found.")
+        return redirect('admin_products')
+
+    # 3. Handle Form Submission (POST)
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        category = request.POST.get('category')
+        
+        try:
+            price = float(request.POST.get('price', 0))
+            stock = int(request.POST.get('stock', 0))
+        except ValueError:
+            price, stock = 0.0, 0
+            
+        image_url = request.POST.get('image')
+        description = request.POST.get('description')
+
+        # Define the fields to update
+        update_data = {
+            "name": name,
+            "categoryId": f"cat_{category.lower()}",
+            "category": category,
+            "price": price,
+            "stock": stock,
+            "thumbnail": image_url,
+            "image": image_url,
+            "description": description,
+            "updatedAt": datetime.now()
+        }
+
+        # Update the database
+        db['Products'].update_one(query, {"$set": update_data})
+        messages.success(request, f'Product "{name}" updated successfully!')
+        
+        return redirect('admin_products')
+
+    # 4. Render the form with existing data (GET)
+    # Ensure we have a string version of the _id for the template form action
+    product['str_id'] = str(product['_id'])
+    
+    return render(request, 'store/admin/edit_product.html', {'product': product})
+
+
+def admin_orders_view(request):
+    # 1. Security Check
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+        
+    # 2. Fetch all orders, sorted by newest first. 
+    # We sort by '_id' instead of 'orderedAt' because old orders don't have 'orderedAt'!
+    orders = list(db['Orders'].find().sort('_id', -1))
+    
+    # 3. Normalize data schema (bridge old test orders and new checkout format)
+    for o in orders:
+        o['str_id'] = str(o.get('_id'))
+        
+        # Bridge the Order ID
+        if 'orderNumber' not in o:
+            o['orderNumber'] = o.get('order_id', o['str_id'])
+            
+        # Bridge the Date
+        if 'orderedAt' not in o:
+            o['orderedAt'] = o.get('created_at')
+            
+        # Bridge the Total Amount
+        if 'totalAmount' not in o:
+            o['totalAmount'] = o.get('total', 0.0)
+            
+    return render(request, 'store/admin/orders.html', {'orders': orders})
+
+from bson.objectid import ObjectId
+
+def admin_order_details_view(request, order_id):
+    # 1. Security Check
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+        
+    # 2. Fetch the master order (Handle both old _id strings and new custom id strings)
+    try:
+        query = {"_id": ObjectId(order_id)}
+    except:
+        query = {"id": order_id}
+        
+    order = db['Orders'].find_one(query)
+    
+    if not order:
+        messages.error(request, "Order not found.")
+        return redirect('admin_orders')
+
+    # 3. Normalize the Order Data (Bridge old test orders to the new layout)
+    order['str_id'] = str(order.get('_id'))
+    order['orderNumber'] = order.get('orderNumber', order.get('order_id', order['str_id']))
+    order['orderedAt'] = order.get('orderedAt', order.get('created_at'))
+    order['totalAmount'] = order.get('totalAmount', order.get('total', 0.0))
+    order['subtotal'] = order.get('subtotal', float(order['totalAmount']) - 120.0)
+    order['shippingFee'] = order.get('shippingFee', 120.0)
+    
+    # Extract the correct address dictionary
+    address_data = order.get('addressData', order.get('shipping', {}))
+    
+    # 4. Fetch the Order Items
+    # First, try looking in the new 'OrderItems' collection
+    order_items = list(db['OrderItems'].find({"orderId": order.get('id')}))
+    
+    # Fallback: If it's an old order, the items might be embedded directly inside the order document
+    if not order_items and 'items' in order:
+        order_items = order['items']
+        
+    # 5. Enrich the items with product names and images
+    enriched_items = []
+    for item in order_items:
+        product_id = item.get('productId')
+        
+        # Look up the product to get its name/image
+        product = db['Products'].find_one({"id": product_id})
+        
+        # Fallback for old database products using MongoDB _id
+        if not product and product_id and len(str(product_id)) == 24:
+            product = db['Products'].find_one({"_id": ObjectId(product_id)})
+            
+        unit_price = item.get('unitPrice', float(product.get('price', 0.0)) if product else 0.0)
+        quantity = int(item.get('quantity', 1))
+        
+        enriched_items.append({
+            'product_name': product.get('name', 'Unknown Product') if product else 'Unknown Product',
+            'product_image': product.get('image', product.get('thumbnail', '')) if product else '',
+            'quantity': quantity,
+            'unitPrice': unit_price,
+            'totalPrice': item.get('totalPrice', unit_price * quantity)
+        })
+
+    # 6. Package and render
+    context = {
+        'order': order,
+        'address': address_data,
+        'items': enriched_items
+    }
+    return render(request, 'store/admin/order_details.html', context)
+
+def admin_ai_assistant_view(request):
+    """Renders the AI Assistant interface for the admin dashboard."""
+    # Security Check
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+        
+    return render(request, 'store/admin/ai_assistant.html')

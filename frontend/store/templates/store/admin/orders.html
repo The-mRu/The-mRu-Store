@@ -1,0 +1,91 @@
+{% extends 'store/admin/admin_base.html' %}
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+    
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 dark:text-white">Order Management</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Track and manage customer orders and fulfillment.</p>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+        <div class="mb-6">
+            {% for message in messages %}
+                <div class="p-4 rounded-xl text-sm font-bold bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <!-- Orders Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 dark:bg-gray-900/50 text-xs font-bold uppercase text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                        <th class="px-6 py-4">Order ID</th>
+                        <th class="px-6 py-4">Date</th>
+                        <th class="px-6 py-4">Total Amount</th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
+                    {% for order in orders %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                            
+                            <!-- Order ID/Number -->
+                            <td class="px-6 py-4 font-bold text-gray-900 dark:text-white">
+                                {{ order.orderNumber|slice:":15" }}...
+                            </td>
+
+                            <!-- Date -->
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-400">
+                                {{ order.orderedAt|date:"M d, Y - h:i A" }}
+                            </td>
+
+                            <!-- Total -->
+                            <td class="px-6 py-4 font-bold text-gray-900 dark:text-white">
+                                ৳{{ order.totalAmount|default:"0.00" }}
+                            </td>
+
+                            <!-- Status Badge -->
+                            <td class="px-6 py-4">
+                                {% if order.status == 'Pending' %}
+                                    <span class="px-2.5 py-1 text-[10px] font-bold uppercase rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Pending</span>
+                                {% elif order.status == 'Processing' %}
+                                    <span class="px-2.5 py-1 text-[10px] font-bold uppercase rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Processing</span>
+                                {% elif order.status == 'Completed' %}
+                                    <span class="px-2.5 py-1 text-[10px] font-bold uppercase rounded-md bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Completed</span>
+                                {% elif order.status == 'Cancelled' %}
+                                    <span class="px-2.5 py-1 text-[10px] font-bold uppercase rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Cancelled</span>
+                                {% else %}
+                                    <span class="px-2.5 py-1 text-[10px] font-bold uppercase rounded-md bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">{{ order.status|default:"Unknown" }}</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="px-6 py-4 text-right space-x-2">
+                               <a href="{% url 'admin_order_details' order.str_id %}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 font-medium text-xs">View Details</a>
+                            </td>
+                            
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                No orders have been placed yet.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

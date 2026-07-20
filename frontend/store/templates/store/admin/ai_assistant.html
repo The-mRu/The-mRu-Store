@@ -1,0 +1,126 @@
+{% extends 'store/admin/admin_base.html' %}
+
+{% block admin_content %}
+<div class="max-w-5xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
+    
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+            <span class="text-indigo-500">✨</span> Store AI Assistant
+        </h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Generate product descriptions, analyze trends, and manage your store using AI.</p>
+    </div>
+
+    <!-- Main Chat/Workspace Area -->
+    <div class="flex-1 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col overflow-hidden">
+        
+        <!-- Quick Actions (Top Bar) -->
+        <div class="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex gap-3 overflow-x-auto">
+            <button class="whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm">
+                📝 Draft Product Description
+            </button>
+            <button class="whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm">
+                📊 Analyze Weekly Sales
+            </button>
+            <button class="whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm">
+                💡 Suggest Promotions
+            </button>
+        </div>
+
+        <!-- Chat History -->
+        <div class="flex-1 p-6 overflow-y-auto space-y-6 bg-gray-50 dark:bg-gray-900/20" id="chat-container">
+            
+            <!-- AI Welcome Message -->
+            <div class="flex gap-4">
+                <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
+                    <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm max-w-[80%]">
+                    <p class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+                        Hello, <strong>{{ request.session.admin_name|default:"Admin" }}</strong>! I am your store's AI Assistant. How can I help you optimize your e-commerce platform today?
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
+            <!-- <form onsubmit="event.preventDefault();" class="relative"> -->
+                <form id="ai-form" class="relative">
+                <input 
+                    type="text" 
+                    id="ai-prompt"
+                    placeholder="Ask the AI something..." 
+                    class="w-full pl-4 pr-14 py-4 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                >
+                <button 
+                    type="submit" 
+                    class="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center transition shadow-md"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 rotate-90" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                    </svg>
+                </button>
+            </form>
+            <div class="text-center mt-2">
+                <span class="text-[10px] text-gray-400 dark:text-gray-500 uppercase font-bold tracking-wider">AI can make mistakes. Verify important data.</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+<!-- Interactive Chat Script -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const form = document.getElementById('ai-form');
+        const input = document.getElementById('ai-prompt');
+        const chatContainer = document.getElementById('chat-container');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault(); // Stop page from refreshing
+            
+            const message = input.value.trim();
+            if (!message) return; // Don't send empty messages
+
+             
+            // 1. Add User Message to Chat
+            const userBubble = `
+                <div class="flex gap-4 justify-end items-start w-full">
+                    <div class="bg-indigo-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] h-fit w-fit break-words">
+                        <p class="text-sm leading-relaxed">${message}</p>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 border border-gray-300 dark:border-gray-600">
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-bold">{{ request.session.admin_name|make_list|first|upper|default:"U" }}</span>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', userBubble);
+            
+            // Clear input and scroll down
+            input.value = '';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // 2. Simulate AI "Thinking" and Responding
+            // (Later, you will replace this setTimeout with a real fetch() call to your FastAPI backend)
+            setTimeout(() => {
+                const aiBubble = `
+                    <div class="flex gap-4">
+                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
+                            <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm max-w-[80%]">
+                            <p class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
+                                I received your message: <em>"${message}"</em> <br><br>
+                                I am currently running in UI-Only mode. You will need to wire me up to your backend API to give me real brainpower!
+                            </p>
+                        </div>
+                    </div>
+                `;
+                chatContainer.insertAdjacentHTML('beforeend', aiBubble);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }, 1000); // 1 second delay to simulate thinking
+        });
+    });
+</script>
+{% endblock %}

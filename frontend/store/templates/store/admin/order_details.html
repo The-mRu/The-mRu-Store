@@ -1,0 +1,109 @@
+{% extends 'store/admin/admin_base.html' %}
+
+{% block admin_content %}
+<div class="max-w-5xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'admin_orders' %}" class="p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition shadow-sm">
+                ← Back
+            </a>
+            <div>
+                <h1 class="text-2xl font-black text-gray-900 dark:text-white">Order: {{ order.orderNumber }}...</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Placed on {{ order.orderedAt|date:"F d, Y \a\t h:i A" }}</p>
+            </div>
+        </div>
+        
+        <!-- Status Badge -->
+        <div>
+            {% if order.status == 'Pending' %}
+                <span class="px-4 py-2 text-sm font-bold uppercase rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Pending</span>
+            {% elif order.status == 'Processing' %}
+                <span class="px-4 py-2 text-sm font-bold uppercase rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Processing</span>
+            {% else %}
+                <span class="px-4 py-2 text-sm font-bold uppercase rounded-xl bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">{{ order.status|default:"Processing" }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Items & Totals -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Items Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Items Ordered</h2>
+                <div class="divide-y divide-gray-100 dark:divide-gray-700">
+                    {% for item in items %}
+                        <div class="py-4 flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 bg-gray-50 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-600">
+                                    {% if item.product_image %}
+                                        <img src="{{ item.product_image }}" alt="{{ item.product_name }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <div class="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">No Img</div>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-gray-900 dark:text-white">{{ item.product_name }}</h3>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Qty: {{ item.quantity }} × ৳{{ item.unitPrice|floatformat:2 }}</p>
+                                </div>
+                            </div>
+                            <div class="font-bold text-gray-900 dark:text-white">
+                                ৳{{ item.totalPrice|floatformat:2 }}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Summary Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Financial Summary</h2>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Subtotal</span>
+                        <span>৳{{ order.subtotal|floatformat:2 }}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-600 dark:text-gray-400">
+                        <span>Shipping Fee</span>
+                        <span>৳{{ order.shippingFee|floatformat:2 }}</span>
+                    </div>
+                    <div class="pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-between font-black text-lg text-gray-900 dark:text-white">
+                        <span>Total Paid</span>
+                        <span class="text-blue-600 dark:text-blue-400">৳{{ order.totalAmount|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Customer Info -->
+        <div class="space-y-6">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Customer Details</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Name</p>
+                        <p class="text-sm text-gray-900 dark:text-white">{{ address.fullName|default:"Guest Customer" }}</p>
+                    </div>
+                    
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Phone Number</p>
+                        <p class="text-sm text-gray-900 dark:text-white">{{ address.phone|default:"N/A" }}</p>
+                    </div>
+
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Shipping Address</p>
+                        <p class="text-sm text-gray-900 dark:text-white whitespace-pre-line">{{ address.address|default:"No address provided." }}</p>
+                        <p class="text-sm text-gray-900 dark:text-white mt-1">{{ address.division|default:"" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

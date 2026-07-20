@@ -12,6 +12,8 @@ from datetime import datetime
 
 from pymongo import MongoClient
 from bson.objectid import ObjectId  
+import uuid
+from bson.objectid import ObjectId
 
 from .services import (
     FASTAPI_BASE_URL,
@@ -137,33 +139,87 @@ def chat_interface_view(request):
     """Renders the AI chat page."""
     return render(request, 'store/chat.html')
 
-def product_detail_view(request, product_id):
-    """Fetches a single product's details for the product page."""
-    # In a production app, you would fetch just the single product from FastAPI
-    # For now, we filter it from the main list
-    all_products = get_all_products() or []
+# def product_detail_view(request, product_id):
+#     """Fetches a single product's details for the product page."""
+#     # In a production app, you would fetch just the single product from FastAPI
+#     # For now, we filter it from the main list
+#     all_products = get_all_products() or []
     
-    product = next((p for p in all_products if str(p.get('id')) == str(product_id)), None)
+#     product = next((p for p in all_products if str(p.get('id')) == str(product_id)), None)
     
-    if not product:
-        # If someone types a bad URL, send them back home
-        return redirect('catalog')
+#     if not product:
+#         # If someone types a bad URL, send them back home
+#         return redirect('catalog')
         
+#     context = {
+#         'product': product
+#     }
+#     return render(request, 'store/product_detail.html', context)
+
+from bson.objectid import ObjectId
+from django.http import Http404
+
+def product_detail_view(request, product_id):
+    # Try to find product by its string 'id' field first
+    product = db['Products'].find_one({"id": product_id})
+    if not product:
+        # If not, try by MongoDB _id (converted to ObjectId)
+        try:
+            product = db['Products'].find_one({"_id": ObjectId(product_id)})
+        except:
+            pass
+    if not product:
+        raise Http404("Product not found")
+
+    # Convert _id to string for use in templates and URLs
+    product['id'] = str(product['_id'])
+
+    # Get related products from the same category (if categoryId exists)
+    related_products = []
+    if product.get('categoryId'):
+        related = db['Products'].find({
+            "categoryId": product['categoryId'],
+            "_id": {"$ne": product['_id']}
+        }).limit(4)
+        for p in related:
+            p['id'] = str(p['_id'])
+            related_products.append(p)
+
     context = {
-        'product': product
+        'product': product,
+        'related_products': related_products,
     }
     return render(request, 'store/product_detail.html', context)
-
+import json
 
 def cart_view(request):
     """Renders the shopping cart page and passes product data for JS to map."""
-    all_products = get_all_products() or []
+    all_products = list(products_collection.find({})) 
     
-    # Create a dictionary mapped by string IDs so JavaScript can easily look up items
-    product_dict = {str(p.get('id')): p for p in all_products}
-    
+    product_dict = {}
+    for p in all_products:
+        # 1. Safely convert MongoDB _id to string
+        p['_id'] = str(p.get('_id'))
+        
+        # 2. Prevent json.dumps crashes by stringifying dates
+        if 'createdAt' in p:
+            p['createdAt'] = str(p['createdAt'])
+        if 'updatedAt' in p:
+            p['updatedAt'] = str(p['updatedAt'])
+            
+        # 3. DOUBLE-KEY TRICK: Save the product under BOTH IDs
+        str_id = p.get('id')
+        mongo_id = p['_id']
+        
+        # If JS asks for the custom string ID, it finds it:
+        if str_id:
+            product_dict[str_id] = p
+            
+        # If JS asks for the MongoDB _id, it ALSO finds it:
+        if mongo_id:
+            product_dict[mongo_id] = p
+            
     context = {
-        # json.dumps converts the Python dictionary safely into a JSON string
         'products_json': json.dumps(product_dict)
     }
     return render(request, 'store/cart.html', context)
@@ -214,8 +270,15 @@ def cart_sync_view(request):
                 product_id = item.get('productId')
                 quantity = int(item.get('quantity', 1))
                 
-                # Fetch product price snapshot from your collection
-                product = products_collection.find_one({"id": product_id})
+                # --- BULLETPROOF FIX: Check both "id" and "_id" ---
+                query = [{"id": product_id}]
+                # If the JS sent a 24-character MongoDB ObjectId, add it to the search
+                if product_id and len(str(product_id)) == 24:
+                    query.append({"_id": ObjectId(product_id)})
+                
+                product = products_collection.find_one({"$or": query})
+                # --------------------------------------------------
+
                 unit_price = float(product.get('price', 0)) if product else 0.0
                 total_price = unit_price * quantity
                 total_amount += total_price
@@ -333,6 +396,12 @@ def search_view(request):
     # We convert the cursor to a list so we can easily pass it to the Django template
     results = list(products_collection.find(mongo_query))
     
+    # --- ADDED FIX: Convert MongoDB '_id' to string 'id' for the template ---
+    for product in results:
+        if 'id' not in product:
+            product['id'] = str(product.get('_id'))
+    # -------------------------------------------------------------------------
+    
     # 4. Package everything up to send to our HTML template
     context = {
         'results': results,
@@ -353,12 +422,112 @@ def checkout_view(request):
         # Kick unauthorized users back to the login page
         return redirect('login')
 
-    all_products = get_all_products() or []
-    product_dict = {str(p.get('id')): p for p in all_products}
+    # 1. Fetch fresh directly from the DB to bypass any caching delays
+    all_products = list(products_collection.find({})) 
+    
+    product_dict = {}
+    for p in all_products:
+        # 2. Safely convert MongoDB _id to string
+        p['_id'] = str(p.get('_id'))
+        
+        # 3. Prevent json.dumps crashes by stringifying dates
+        if 'createdAt' in p:
+            p['createdAt'] = str(p['createdAt'])
+        if 'updatedAt' in p:
+            p['updatedAt'] = str(p['updatedAt'])
+            
+        # 4. DOUBLE-KEY TRICK: Save the product under BOTH IDs
+        str_id = p.get('id')
+        mongo_id = p['_id']
+        
+        if str_id:
+            product_dict[str_id] = p
+        if mongo_id:
+            product_dict[mongo_id] = p
 
     return render(request, 'store/checkout.html', {
         'products_json': json.dumps(product_dict)
     })
+
+def place_order_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=400)
+    
+    try:
+        # 1. Parse incoming checkout payload from our frontend JS script
+        data = json.loads(request.body)
+        items = data.get('items', [])
+        shipping_data = data.get('shipping', {})
+        total_amount = data.get('total', 0)
+        
+        user_id = request.session.get('user_id', 'guest')
+        
+        if not items:
+            return JsonResponse({'error': 'No items found in order payload'}, status=400)
+            
+        # 2. Generate Unique Structural Tracking Elements
+        order_id = str(uuid.uuid4())
+        order_number = f"MRU-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        
+        # 3. Create the Master Order Document matching your collection attributes
+        order_document = {
+            "id": order_id,
+            "orderNumber": order_number,
+            "userId": user_id,
+            "addressData": shipping_data, 
+            "paymentId": f"PAY-{uuid.uuid4().hex[:8].upper()}", 
+            "subtotal": float(total_amount) - 120.00, 
+            "discount": 0.0,
+            "shippingFee": 120.0,
+            "totalAmount": float(total_amount),
+            "status": "Pending",
+            "paymentStatus": "Unpaid",
+            "orderedAt": datetime.utcnow(),
+            "deliveredAt": None
+        }
+        
+        # Insert Master Order
+        orders_collection.insert_one(order_document)
+        
+        # 4. Loop through specific checkout items and insert into OrderItems mapping
+        for item in items:
+            product_id = item.get('productId')
+            quantity = int(item.get('quantity', 1))
+            
+            # --- BULLETPROOF FIX: Check both "id" and "_id" ---
+            query = [{"id": product_id}]
+            if product_id and len(str(product_id)) == 24:
+                query.append({"_id": ObjectId(product_id)})
+            
+            product = products_collection.find_one({"$or": query})
+            # --------------------------------------------------
+
+            # Ensure we default to 0.0, not 500.00, if something genuinely goes missing
+            unit_price = float(product.get('price', 0.0)) if product else 0.0
+            
+            order_item_document = {
+                "id": str(uuid.uuid4()),
+                "orderId": order_id,
+                "productId": product_id,
+                "variantId": None,
+                "quantity": quantity,
+                "unitPrice": unit_price,
+                "totalPrice": unit_price * quantity
+            }
+            order_items_collection.insert_one(order_item_document)
+            
+        # 5. Reset persistence layer state for the specific User Cart profile
+        if user_id != 'guest':
+            carts_collection.update_one(
+                {"userId": user_id},
+                {"$set": {"totalAmount": 0.0, "updatedAt": datetime.utcnow()}}
+            )
+            
+        return JsonResponse({'status': 'success', 'orderNumber': order_number}, status=200)
+        
+    except Exception as e:
+        print(f"Database error executing order batch: {str(e)}")
+        return JsonResponse({'error': 'Internal server pipeline failure'}, status=500)
 
 def place_order_api(request):
     """Bridge view to securely place an order via FastAPI."""
@@ -392,81 +561,6 @@ def order_success_view(request):
 
 
 
-
-
-def place_order_view(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Invalid request method'}, status=400)
-    
-    try:
-        # 1. Parse incoming checkout payload from our frontend JS script
-        data = json.loads(request.body)
-        items = data.get('items', [])
-        shipping_data = data.get('shipping', {})
-        total_amount = data.get('total', 0)
-        
-        user_id = request.session.get('user_id', 'guest')
-        
-        if not items:
-            return JsonResponse({'error': 'No items found in order payload'}, status=400)
-            
-        # 2. Generate Unique Structural Tracking Elements
-        order_id = str(uuid.uuid4())
-        order_number = f"MRU-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
-        
-        # 3. Create the Master Order Document matching your collection attributes
-        order_document = {
-            "id": order_id,
-            "orderNumber": order_number,
-            "userId": user_id,
-            "addressData": shipping_data, # Directly storing structural snapshot 
-            "paymentId": f"PAY-{uuid.uuid4().hex[:8].upper()}", # COD Placeholder token
-            "subtotal": float(total_amount) - 120.00, # Back-calculating flat shipping fee
-            "discount": 0.0,
-            "shippingFee": 120.0,
-            "totalAmount": float(total_amount),
-            "status": "Pending",
-            "paymentStatus": "Unpaid",
-            "orderedAt": datetime.utcnow(),
-            "deliveredAt": None
-        }
-        
-        # Insert Master Order
-        orders_collection.insert_one(order_document)
-        
-        # 4. Loop through specific checkout items and insert into OrderItems mapping
-        for item in items:
-            product_id = item.get('productId')
-            quantity = int(item.get('quantity', 1))
-            
-            # Fetch product details for unit price snapshot mapping
-            product = products_collection.find_one({"id": product_id})
-            unit_price = float(product.get('price', 0)) if product else 500.00
-            
-            order_item_document = {
-                "id": str(uuid.uuid4()),
-                "orderId": order_id,
-                "productId": product_id,
-                "variantId": None,
-                "quantity": quantity,
-                "unitPrice": unit_price,
-                "totalPrice": unit_price * quantity
-            }
-            order_items_collection.insert_one(order_item_document)
-            
-        # 5. Reset persistence layer state for the specific User Cart profile
-        if user_id != 'guest':
-            carts_collection.update_one(
-                {"userId": user_id},
-                {"$set": {"totalAmount": 0.0, "updatedAt": datetime.utcnow()}}
-            )
-            
-        return JsonResponse({'status': 'success', 'orderNumber': order_number}, status=200)
-        
-    except Exception as e:
-        print(f"Database error executing order batch: {str(e)}")
-        return JsonResponse({'error': 'Internal server pipeline failure'}, status=500)
-    
 
 
 
@@ -734,3 +828,250 @@ def order_detail_view(request, order_id):
         'order': order,
     }
     return render(request, 'store/order_detail.html', context)
+
+
+from django.shortcuts import render
+from django.core.paginator import Paginator
+
+def shop_view(request):
+    category_slug = request.GET.get('category')
+    search_query = request.GET.get('q')
+    sort = request.GET.get('sort', 'newest')
+    page = request.GET.get('page', 1)
+
+    # ---- Build the filter ----
+    conditions = []
+    current_category = 'All Products'
+
+    if category_slug:
+        # ---- Mapping from URL slug to exact categoryId ----
+        category_map = {
+            'smartphones': 'cat_smartphones',
+            'laptops': 'cat_computers',          # or 'cat_gaming_laptops' – choose as needed
+            'headphones': 'cat_audio',
+            'mens-clothing': 'cat_mens_clothing',
+            'womens-clothing': 'cat_womens_clothing',
+            'sneakers': 'cat_footwear',
+            # add more as you discover them
+        }
+
+        if category_slug in category_map:
+            exact_id = category_map[category_slug]
+            conditions.append({'categoryId': exact_id})
+            current_category = category_slug.replace('-', ' ').title()
+        else:
+            # ---- Fallback: search for categoryId that contains the slug (case‑insensitive) ----
+            # Replace hyphens with underscores to match DB format
+            search_term = category_slug.replace('-', '_')
+            conditions.append({'categoryId': {'$regex': search_term, '$options': 'i'}})
+            current_category = category_slug.replace('-', ' ').title()
+
+    # ---- Search query ----
+    if search_query:
+        regex = {'$regex': search_query, '$options': 'i'}
+        conditions.append({
+            '$or': [
+                {'name': regex},
+                {'description': regex},
+                {'category': regex},          # if you have a display name field
+                {'categoryId': regex},        # also search the ID
+            ]
+        })
+
+    # ---- Combine conditions ----
+    if conditions:
+        filter_criteria = {'$and': conditions} if len(conditions) > 1 else conditions[0]
+    else:
+        filter_criteria = {}
+
+    # ---- Fetch products ----
+    products = list(db['Products'].find(filter_criteria))
+
+    # ---- Sorting ----
+    if sort == 'newest':
+        products.sort(key=lambda p: p.get('createdAt', ''), reverse=True)
+    elif sort == 'price_low':
+        products.sort(key=lambda p: p.get('price', 0))
+    elif sort == 'price_high':
+        products.sort(key=lambda p: p.get('price', 0), reverse=True)
+
+    # ---- Pagination ----
+    paginator = Paginator(products, 12)
+    page_obj = paginator.get_page(page)
+
+    context = {
+        'products': page_obj,
+        'category_slug': category_slug,
+        'current_category': current_category,
+        'sort': sort,
+        'total_products': len(products),
+        'search_query': search_query,
+    }
+    return render(request, 'store/shop.html', context)
+
+def admin_dashboard_view(request):
+    # SECURITY: Check for admin_id instead of user_id
+    admin_id = request.session.get('admin_id')
+    if not admin_id:
+        return redirect('admin_login')
+
+    # Fetch admin details from the Admins collection, not Users
+    admin_profile = db['Admins'].find_one({"id": admin_id})
+    if not admin_profile:
+        return redirect('admin_login')
+
+    # ==========================================
+    # AGGREGATE METRICS FROM MONGO DB
+    # ==========================================
+    total_products = db['Products'].count_documents({})
+    total_orders = db['Orders'].count_documents({})
+    total_customers = db['Users'].count_documents({"role": {"$ne": "admin"}})
+
+    # Calculate Total Revenue from completed or paid orders
+    pipeline = [
+        {"$match": {"status": {"$ne": "Cancelled"}}},
+        {"$group": {"_id": None, "total_revenue": {"$sum": "$total_price"}}}
+    ]
+    revenue_result = list(db['Orders'].aggregate(pipeline))
+    total_revenue = revenue_result[0]['total_revenue'] if revenue_result else 0.0
+
+    # Recent Orders (Top 5)
+    recent_orders = list(db['Orders'].find().sort("createdAt", -1).limit(5))
+    for order in recent_orders:
+        order['string_id'] = str(order.get('order_id', order.get('_id', '')))
+
+    # Low Stock Warning (Products with stock <= 5)
+    low_stock_products = list(db['Products'].find({"stock": {"$lte": 5}}).limit(5))
+
+    context = {
+        'admin_name': admin_profile.get('name', 'Admin'),
+        'total_revenue': round(total_revenue, 2),
+        'total_orders': total_orders,
+        'total_products': total_products,
+        'total_customers': total_customers,
+        'recent_orders': recent_orders,
+        'low_stock_products': low_stock_products,
+        'active_tab': 'overview'
+    }
+
+    return render(request, 'store/admin/dashboard.html', context)
+
+from django.contrib.auth.hashers import check_password
+from django.contrib import messages
+
+def admin_login_view(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+
+        # Look specifically in the Admins collection
+        admin_user = db['Admins'].find_one({"email": email})
+
+        if admin_user and check_password(password, admin_user.get('password', '')):
+            if not admin_user.get('isActive', True):
+                messages.error(request, "This admin account is disabled.")
+                return redirect('admin_login')
+
+            # Set specific ADMIN session variables
+            request.session['admin_id'] = admin_user['id']
+            request.session['admin_role'] = admin_user['role']
+            request.session['admin_name'] = admin_user['name']
+            
+            return redirect('admin_dashboard')
+        else:
+            messages.error(request, "Invalid admin credentials.")
+            return redirect('admin_login')
+
+    return render(request, 'store/admin/login.html')
+
+from django.shortcuts import redirect
+from django.contrib import messages
+
+def admin_logout_view(request):
+    if request.method == 'POST':
+        # 1. Clear all admin-specific session keys
+        request.session.pop('admin_id', None)
+        request.session.pop('admin_role', None)
+        request.session.pop('admin_name', None)
+        
+        # 2. (Optional) Send a success message to the login page
+        messages.success(request, "You have been successfully logged out of the Admin Portal.")
+        
+    # 3. Redirect back to the secure admin login screen
+    return redirect('admin_login')
+
+from bson.objectid import ObjectId
+from django.shortcuts import redirect
+from django.contrib import messages
+
+def admin_products_view(request):
+    # Security Check
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+        
+    # Fetch all products, newest first
+    products = list(db['Products'].find().sort('_id', -1))
+    
+    # Convert MongoDB ObjectIds to strings for the HTML template
+    for p in products:
+        p['str_id'] = str(p.get('_id'))
+        
+    return render(request, 'store/admin/products.html', {'products': products})
+
+def admin_delete_product(request, product_id):
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+        
+    if request.method == 'POST':
+        # Delete the product from MongoDB
+        db['Products'].delete_one({"_id": ObjectId(product_id)})
+        messages.success(request, "Product deleted successfully.")
+        
+    return redirect('admin_products')
+
+
+from datetime import datetime
+from django.shortcuts import render, redirect
+from django.contrib import messages
+
+def admin_add_product_view(request):
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        category = request.POST.get('category')
+        
+        try:
+            price = float(request.POST.get('price', 0))
+            stock = int(request.POST.get('stock', 0))
+        except ValueError:
+            price, stock = 0.0, 0
+            
+        image_url = request.POST.get('image')
+        description = request.POST.get('description')
+
+        # Generate a unique string ID just like the old 'prod_auto_402'
+        custom_id = f"prod_custom_{uuid.uuid4().hex[:6]}"
+
+        # Create the document matching your ORIGINAL schema
+        new_product = {
+            "id": custom_id,                             # CRITICAL: Fixes the 0 price bug
+            "name": name,
+            "categoryId": f"cat_{category.lower()}",     # Mimics 'cat_smartphones'
+            "category": category,                        # Kept for safety
+            "price": price,
+            "stock": stock,
+            "thumbnail": image_url,                      # Mimics original image field
+            "image": image_url,                          # Kept for safety
+            "description": description,
+            "createdAt": datetime.now(),
+            "status": "active"
+        }
+
+        db['Products'].insert_one(new_product)
+        messages.success(request, f'Product "{name}" added successfully!')
+        
+        return redirect('admin_products')
+
+    return render(request, 'store/admin/add_product.html')

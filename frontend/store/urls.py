@@ -18,6 +18,7 @@ urlpatterns = [
     path('checkout/', views.checkout_view, name='checkout'),
     path('order-success/', views.order_success_view, name='order_success'),
     path('order/<str:order_id>/', views.order_detail_view, name='order_detail'),
+    path('shop/', views.shop_view, name='shop'),
     
     # API Routes (Kept the correct ones, removed duplicates)
     path('api/cart/sync/', views.sync_cart_api, name='sync_cart_api'), 
@@ -26,4 +27,12 @@ urlpatterns = [
     # Dashboard Routes
     path('dashboard/', views.dashboard_view, name='dashboard'),
     path('order-history/', views.order_history_view, name='order_history'),
+    
+    #admin
+    path('admin-dashboard/', views.admin_dashboard_view, name='admin_dashboard'),
+    path('admin-logout/', views.admin_logout_view, name='admin_logout'),
+    path('admin-login/', views.admin_login_view, name='admin_login'),
+    path('admin-dashboard/products/', views.admin_products_view, name='admin_products'),
+    path('admin-dashboard/products/delete/<str:product_id>/', views.admin_delete_product, name='admin_delete_product'),
+    path('admin-dashboard/products/add/', views.admin_add_product_view, name='admin_add_product'),
 ]

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Admin Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased min-h-screen flex">
+
+    {% if request.session.admin_id %}
+        <!-- ========================================== -->
+        <!-- ADMIN SIDEBAR (Only visible when logged in)-->
+        <!-- ========================================== -->
+        <aside class="w-64 bg-gray-900 text-white flex flex-col hidden md:flex fixed h-full z-20">
+            <div class="h-20 flex items-center px-6 border-b border-gray-800">
+                <span class="text-xl font-black tracking-tighter text-blue-500">mRu<span class="text-white">Admin</span></span>
+            </div>
+            
+            <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto text-sm font-medium">
+                <a href="{% url 'admin_dashboard' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl {% if request.resolver_match.url_name == 'admin_dashboard' %}bg-blue-600 text-white shadow-sm{% else %}text-gray-400 hover:text-white hover:bg-gray-800 transition{% endif %}">
+                    <span>📊</span> Dashboard
+                </a>
+                <a href="{% url 'admin_products' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl {% if 'products' in request.resolver_match.url_name %}bg-blue-600 text-white shadow-sm{% else %}text-gray-400 hover:text-white hover:bg-gray-800 transition{% endif %}">
+                    <span>📦</span> Products
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition">
+                    <span>🛒</span> Orders
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition">
+                    <span>👥</span> Customers
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition">
+                    <span>📈</span> Analytics
+                </a>
+                
+                <div class="pt-4 mt-4 border-t border-gray-800">
+                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/30 transition">
+                        <span>✨</span> AI Assistant
+                    </a>
+                </div>
+            </nav>
+
+            <div class="p-4 border-t border-gray-800">
+                <form action="{% url 'admin_logout' %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:text-white hover:bg-red-600 transition text-sm font-bold">
+                        <span>🚪</span> Sign Out
+                    </button>
+                </form>
+            </div>
+        </aside>
+    {% endif %}
+
+    <!-- ========================================== -->
+    <!-- MAIN CONTENT AREA                          -->
+    <!-- ========================================== -->
+    <div class="{% if request.session.admin_id %}flex-1 md:ml-64 flex flex-col min-h-screen transition-all{% else %}w-full min-h-screen flex items-center justify-center{% endif %}">
+        
+        {% if request.session.admin_id %}
+            <!-- Topbar -->
+            <header class="h-20 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-8 sticky top-0 z-10">
+                <h2 class="text-lg font-bold text-gray-800 dark:text-white">Admin Workspace</h2>
+                <div class="flex items-center gap-4">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-sm font-bold text-gray-900 dark:text-white">{{ request.session.admin_name }}</p>
+                        <p class="text-xs text-blue-600 dark:text-blue-400">{{ request.session.admin_role }}</p>
+                    </div>
+                    <!-- Generates the first letter of the admin's name -->
+                    <div class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                        {{ request.session.admin_name|make_list|first|upper|default:"A" }}
+                    </div>
+                </div>
+            </header>
+        {% endif %}
+
+        <!-- Dynamic Content Injected Here (ONLY DECLARED ONCE) -->
+        <main class="{% if request.session.admin_id %}flex-1 p-8{% else %}w-full flex justify-center px-4{% endif %}">
+            {% block admin_content %}{% endblock %}
+        </main>
+    </div>
+
+</body>
+</html>

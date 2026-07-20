@@ -13,22 +13,17 @@
                 </a>
             </div>
 
-<!-- Center: AI-Powered Search Bar -->
+            <!-- Center: AI-Powered Search Bar -->
             <div class="flex-1 max-w-3xl hidden md:block relative group">
-                <!-- NEW: Added <form>, method="GET", and action pointing to your catalog -->
                 <form method="GET" action="{% url 'search' %}" class="relative flex items-center w-full h-12 rounded-full focus-within:shadow-lg bg-gray-100 dark:bg-gray-800 border border-transparent focus-within:border-blue-500 focus-within:bg-white dark:focus-within:bg-gray-900 overflow-visible transition-all">
                     <div class="grid place-items-center h-full w-12 text-gray-400">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     </div>
-                    
-                    <!-- NEW: Added name="q" so Django can read request.GET.get('q') -->
                     <input type="text" name="q" id="ai-search" class="peer h-full w-full outline-none text-sm text-gray-700 dark:text-gray-200 bg-transparent pr-2" placeholder="Ask AI to find products, categories, or deals..." autocomplete="off" />
-                    
-                    <!-- NEW: Changed button to type="submit" -->
                     <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 h-10 mr-1 text-sm font-medium transition-colors">Search</button>
                 </form>
 
-                <!-- Search Dropdown (Hidden by default, shows on focus) -->
+                <!-- Search Dropdown -->
                 <div class="absolute w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl opacity-0 invisible peer-focus-within:opacity-100 peer-focus-within:visible transition-all duration-200 z-50 top-full left-0 overflow-hidden">
                     <div class="p-4 border-b border-gray-100 dark:border-gray-700 bg-blue-50/50 dark:bg-blue-900/20">
                         <h4 class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1">✨ AI Suggestions</h4>
@@ -46,6 +41,7 @@
                     </div>
                 </div>
             </div>
+
             <!-- Right: Icons & Profile -->
             <div class="flex items-center space-x-3 md:space-x-5">
                 <!-- Theme Toggle -->
@@ -107,15 +103,11 @@
                             {% endif %}
                         </div>
                         <ul class="py-2">
-                            <!-- <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">My Profile</a></li> -->
-                            <a href="{% url 'dashboard' %}" class="block px-4 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                Profile</a>
+                            <a href="{% url 'dashboard' %}" class="block px-4 py-2 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Profile</a>
                             <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Orders & Returns</a></li>
                             <li><a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Wishlist</a></li>
                             <li>
-                                <a href="{% url 'dashboard' %}?tab=settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                    ⚙️ Settings
-                                </a>
+                                <a href="{% url 'dashboard' %}?tab=settings" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">⚙️ Settings</a>
                             </li>
                             <li class="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
                                 <form method="POST" action="{% url 'logout' %}" onsubmit="localStorage.removeItem('mRuCart');">
@@ -134,43 +126,51 @@
     <div class="border-t border-gray-100 dark:border-gray-800 hidden md:block">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-12">
-                
                 <div class="flex items-center h-full">
                     <!-- Categories Mega Menu Trigger -->
-                    <div class="group h-full flex items-center">
+                    <div class="group h-full flex items-center relative">
                         <button class="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white pr-6 h-full border-b-2 border-transparent group-hover:border-blue-600 transition-colors">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
                             All Categories
                         </button>
                         
                         <!-- Mega Menu Panel -->
-                        <div class="absolute left-0 top-[100%] w-full bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-40 flex">
-                            <div class="max-w-7xl mx-auto w-full p-8 grid grid-cols-4 gap-8">
-                                <div>
-                                    <h3 class="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> Electronics</h3>
-                                    <ul class="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-                                        <li><a href="#" class="hover:text-blue-600 transition">Smartphones</a></li>
-                                        <li><a href="#" class="hover:text-blue-600 transition">Laptops & PCs</a></li>
-                                        <li><a href="#" class="hover:text-blue-600 transition">Audio & Headphones</a></li>
+                        <div class="absolute left-0 top-[100%] w-screen max-w-7xl mx-auto bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-40">
+                            <div class="p-8 grid grid-cols-4 gap-8">
+                                <!-- Electronics Column -->
+                                <div class="space-y-4">
+                                    <h3 class="flex items-center gap-2 font-bold text-gray-900 dark:text-white mb-3">
+                                        <span class="text-blue-500">💻</span> Electronics
+                                    </h3>
+                                    <ul class="space-y-2">
+                                        <li><a href="{% url 'shop' %}?category=smartphones" class="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white transition-colors">Smartphones</a></li>
+                                        <li><a href="{% url 'shop' %}?category=laptops" class="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white transition-colors">Laptops & PCs</a></li>
+                                        <li><a href="{% url 'shop' %}?category=headphones" class="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white transition-colors">Headphones</a></li>
                                     </ul>
                                 </div>
-                                <div>
-                                    <h3 class="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><svg class="w-4 h-4 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"/></svg> Fashion</h3>
-                                    <ul class="space-y-2 text-sm text-gray-500 dark:text-gray-400">
-                                        <li><a href="#" class="hover:text-blue-600 transition">Men's Clothing</a></li>
-                                        <li><a href="#" class="hover:text-blue-600 transition">Women's Clothing</a></li>
-                                        <li><a href="#" class="hover:text-blue-600 transition">Sneakers & Shoes</a></li>
+
+                                <!-- Fashion Column -->
+                                <div class="space-y-4">
+                                    <h3 class="flex items-center gap-2 font-bold text-gray-900 dark:text-white mb-3">
+                                        <span class="text-pink-500">👕</span> Fashion
+                                    </h3>
+                                    <ul class="space-y-2">
+                                        <li><a href="{% url 'shop' %}?category=mens-clothing" class="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white transition-colors">Men's Clothing</a></li>
+                                        <li><a href="{% url 'shop' %}?category=womens-clothing" class="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white transition-colors">Women's Clothing</a></li>
+                                        <li><a href="{% url 'shop' %}?category=sneakers" class="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-white transition-colors">Sneakers & Shoes</a></li>
                                     </ul>
                                 </div>
-                                <!-- Add more columns as needed -->
+
+                                <!-- You can add more columns here -->
                             </div>
                         </div>
                     </div>
 
                     <!-- Standard Nav Links -->
                     <div class="flex space-x-6 ml-6">
+                        <!-- FIX: Both Home and Shop now use catalog -->
                         <a href="{% url 'catalog' %}" class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition">Home</a>
-                        <a href="#" class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition">Shop</a>
+                        <a href="{% url 'shop' %}" class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition">Shop</a>
                         <a href="#" class="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700 transition flex items-center gap-1">Deals <span class="bg-red-100 text-red-600 text-[10px] px-1.5 rounded-full font-bold">HOT</span></a>
                         <a href="#" class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition">Brands</a>
                         <a href="#" class="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition">About</a>
@@ -188,9 +188,8 @@
     </div>
 </nav>
 
-<!-- JavaScript for Interactivity -->
+<!-- JavaScript -->
 <script>
-    // Dark/Light Mode Toggle
     function toggleDarkMode() {
         if (document.documentElement.classList.contains('dark')) {
             document.documentElement.classList.remove('dark');
@@ -201,14 +200,12 @@
         }
     }
 
-    // On page load or when changing themes, best to add inline in <head> to avoid FOUC
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
         document.documentElement.classList.add('dark');
     } else {
         document.documentElement.classList.remove('dark');
     }
 
-    // AI Assistant Panel Toggle (Placeholder function for your floating chat)
     function toggleAIAssistant() {
         alert("AI Chat Panel initializing... (You can attach your floating widget here!)");
     }

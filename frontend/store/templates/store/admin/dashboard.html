@@ -1,0 +1,37 @@
+{% extends 'store/admin/admin_base.html' %}
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+    
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 dark:text-white">Overview</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Real-time metrics for your store.</p>
+        </div>
+        <a href="{% url 'admin_dashboard' %}" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white font-bold text-sm rounded-xl transition shadow-sm">
+            🔄 Refresh
+        </a>
+    </div>
+
+    <!-- Metric Cards Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div class="flex justify-between mb-3"><span class="text-xs font-bold uppercase text-gray-400">Total Revenue</span><span>💰</span></div>
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white">৳{{ total_revenue }}</h3>
+        </div>
+        <div class="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div class="flex justify-between mb-3"><span class="text-xs font-bold uppercase text-gray-400">Total Orders</span><span>📦</span></div>
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white">{{ total_orders }}</h3>
+        </div>
+        <div class="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div class="flex justify-between mb-3"><span class="text-xs font-bold uppercase text-gray-400">Catalog Size</span><span>🛍️</span></div>
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white">{{ total_products }}</h3>
+        </div>
+        <div class="p-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div class="flex justify-between mb-3"><span class="text-xs font-bold uppercase text-gray-400">Customers</span><span>👥</span></div>
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white">{{ total_customers }}</h3>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

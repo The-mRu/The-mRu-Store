@@ -1,3 +1,4 @@
+#backend/api/orders.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any
@@ -22,15 +23,38 @@ async def get_all_orders():
     orders = await db.Orders.find({}, {"_id": 0}).to_list(length=100)
     return orders
 
-@router.get("/{order_id}/status")
-async def get_order_status(order_id: str):
-    """Check the status of a specific order."""
-    # Note: Updated "id" to "order_id" to match insertion logic
-    order = await db.Orders.find_one({"order_id": order_id}, {"_id": 0, "status": 1})
+# @router.get("/{order_id}/status")
+# async def get_order_status(order_id: str):
+#     """Check the status of a specific order."""
+#     # Note: Updated "id" to "order_id" to match insertion logic
+#     order = await db.Orders.find_one({"order_id": order_id}, {"_id": 0, "status": 1})
+    
+#     if not order:
+#         raise HTTPException(status_code=404, detail="Order not found")
+#     return order
+
+@router.get("/{order_id}")
+async def verify_order_for_ai(order_id: str, user_id: str):
+    """Verify an order exists and belongs to the user (Used by AI tool)."""
+    
+    # We query MongoDB using "userId" because that is how place_order saves it
+    order = await db.Orders.find_one({
+        "order_id": order_id, 
+        "userId": user_id
+    }, {"_id": 0, "status": 1, "created_at": 1})
     
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return order
+        # If the order doesn't exist OR doesn't belong to this user, block it
+        raise HTTPException(
+            status_code=404, 
+            detail="Order not found or does not belong to this account."
+        )
+        
+    return {
+        "valid": True, 
+        "order_id": order_id, 
+        "status": order.get("status", "unknown")
+    }
 
 @router.get("/user/{user_id}")
 async def get_user_orders(user_id: str):

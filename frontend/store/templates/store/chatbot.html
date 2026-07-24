@@ -58,6 +58,9 @@
     }
 </style>
 
+<!-- Markdown parsing library -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 <!-- Chatbot Logic -->
 <script>
     document.addEventListener("DOMContentLoaded", function() {
@@ -171,9 +174,12 @@
                 aiText = data.response || data.reply || data.message || data.text || data.answer || JSON.stringify(data);
             }
 
+            // === Markdown rendering for AI messages ===
+            const formattedAI = marked.parse(aiText); // Convert Markdown to HTML
+
             const aiMsgHTML = `
                 <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 p-3.5 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm animate-fade-in-up">
-                    ${aiText}
+                    ${formattedAI}
                 </div>
             `;
             chatMessages.insertAdjacentHTML('beforeend', aiMsgHTML);

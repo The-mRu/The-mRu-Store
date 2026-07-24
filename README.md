@@ -1,163 +1,135 @@
+# The-mRu-Store
 
-# The-mRu-Store 🛒🤖  
-### AI-Powered E-Commerce Backend with Semantic Search & RAG Chat Assistant
+The-mRu-Store is a full-stack e-commerce demo project that combines a FastAPI backend, a Django storefront frontend, and an AI-powered assistant for semantic search and product support.
 
-A production‑ready e‑commerce backend built with **FastAPI**, **MongoDB**, and **OpenAI**.  
-It features a **Retrieval-Augmented Generation (RAG)** chat assistant that answers product, stock, and policy questions using semantic search and real‑time tool calling.
+It is designed to showcase how a modern online store can integrate:
+- product browsing and cart flows,
+- user authentication and order management,
+- admin management pages,
+- and an AI assistant powered by retrieval-augmented generation (RAG).
 
----
+## Features
 
-## ✨ Key Features
+- FastAPI-based backend with REST endpoints for products, search, chat, orders, auth, and support tickets
+- Django-based frontend for the user shopping experience and admin dashboard
+- Semantic product search using embeddings instead of simple keyword matching
+- RAG-enabled assistant for answering store-related questions from ingested documents
+- Admin pages for product and order management
+- Support for cart, checkout, user accounts, order history, and product browsing
+- AI-powered workflows for support and product assistance
 
-- **Semantic Product Search** – find items by meaning, not just keywords (via sentence‑transformers).
-- **Real‑time Stock & Product Info** – exact lookups via product ID.
-- **Policy Q&A** – ask about shipping, returns, warranties – answers come from ingested store policy documents (PDF/Word).
-- **Support Ticket Creation** – automatically generate tickets for human review.
-- **Async & Fast** – non‑blocking I/O with FastAPI and Motor (MongoDB async driver).
+## Tech Stack
 
----
+- Backend: FastAPI
+- Frontend: Django
+- Database: SQLite for Django, with MongoDB support expected by the backend services
+- AI: OpenAI + embeddings-based search
+- Document processing: scripts for ingestion and vectorization
+- Python packages: FastAPI, Django, Uvicorn, OpenAI, sentence-transformers, and related dependencies
 
-## 🧱 Architecture Overview
+## Project Structure
 
-| Component               | Technology                               |
-|-------------------------|------------------------------------------|
-| Web Framework           | FastAPI (async)                          |
-| Database                | MongoDB (via Motor)                      |
-| AI Orchestration        | OpenAI `gpt-4o-mini` (native tool calls) |
-| Vector Embeddings       | `all-MiniLM-L6-v2` (384‑dim)            |
-| Similarity Search       | Cosine similarity                        |
-| Document Ingestion      | PDF & Word parsing → chunking → vectorise|
-| Frontend (test UI)      | Static `index.html`                      |
+- [main_db_server.py](main_db_server.py) — FastAPI application entry point
+- [backend/api/](backend/api/) — API modules for products, search, chat, orders, auth, users, and more
+- [frontend/](frontend/) — Django project and storefront application
+- [frontend/store/](frontend/store/) — templates, views, models, and frontend logic
+- [agent/](agent/) — AI orchestration and tool helpers
+- [scripts/](scripts/) — scripts for seeding data, embeddings, and document ingestion
+- [testing/](testing/) — test scripts and API checks
 
----
+## Architecture
 
-## 🛠️ Local Setup & Installation
+![Project Architecture](project%20architecture.png)
 
-### 1. Prerequisites
-- Python 3.9+
-- MongoDB running locally on `mongodb://localhost:27017`
-- An [OpenAI API key](https://platform.openai.com/account/api-keys)
+The diagram above shows the high-level flow of the system, including the user-facing frontend, the FastAPI backend, the AI assistant layer, and the data/document processing pipeline.
 
-### 2. Clone & Virtual Environment
+## Getting Started
+
+### 1. Clone the repository
+
 ```bash
 git clone <your-repo-url>
-cd the-mru-store
-python -m venv .venv
-source .venv/bin/activate      # Linux/Mac
-.venv\Scripts\activate         # Windows
+cd The-mRu-store
 ```
 
-### 3. Install Dependencies
+### 2. Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Environment Variables
-Create a `.env` file in the project root with the following (see `.env.example`):
+### 4. Run the backend
 
-```
-OPENAI_API_KEY=your_openai_api_key_here
-MONGO_URI=mongodb://localhost:27017
-MONGO_DB_NAME=amazon_clone_db
-API_BASE_URL=http://127.0.0.1:8000
-```
-
----
-
-## 🧠 Database Seeding & AI Setup
-
-Before starting the server, you must populate the vector indices.
-
-### Backfill Product Embeddings
-This computes 384‑dim vectors for all existing products in MongoDB, enabling semantic search.
-
-```bash
-python scripts/backfill_vectors.py
-```
-
-### Ingest Store Policies
-Scans `docs/static/` for PDFs and Word documents, chunks the text, and stores vectorised knowledge.
-
-```bash
-python scripts/ingest_docs.py
-```
-
----
-
-## 💻 Running the Application
-
-Start the FastAPI server with live reload:
+From the project root:
 
 ```bash
 uvicorn main_db_server:app --reload
 ```
 
-- **API Docs (Swagger):** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)  
-- **Chat UI:** Open `index.html` in your browser to interact with the AI assistant.
+The backend will be available at:
+- `http://127.0.0.1:8000/docs` for FastAPI Swagger documentation
+- `http://127.0.0.1:8000/` for the root API endpoint
 
----
+### 5. Run the frontend
 
-## 🤖 AI Agent Capabilities (Tools)
-
-The chat assistant is tightly bound to e‑commerce operations. It detects user intent and invokes the appropriate backend tools:
-
-| Tool | Description |
-|------|-------------|
-| `ai_omni_search` | Vector‑based semantic product search (conceptual matching) |
-| `get_product_by_id` | Retrieve exact product details and current stock |
-| `search_store_policy` | Answer policy questions using ingested documents |
-| `create_support_ticket` | Generate a new support ticket in the database for human follow‑up |
-
----
-
-<!-- ## 📁 Project Structure (simplified)
-
-```
-.
-├── main_db_server.py         # FastAPI app entry
-├── scripts/
-│   ├── backfill_vectors.py   # Generate product embeddings
-│   └── ingest_docs.py        # Ingest policy files into vector store
-├── docs/static/              # Store policies (PDF, .docx)
-├── index.html                # Chat UI test page
-├── .env.example
-└── requirements.txt
-``` -->
-
----
-
-## 🧪 Testing the API
-
-You can test endpoints via Swagger UI or with `curl`.  
-Example: semantic search for `"comfortable running shoes"`:
+From the frontend folder:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "comfortable running shoes"}'
+cd frontend
+python manage.py migrate
+python manage.py runserver 8080
 ```
 
----
-<!-- 
-## 🚀 Deployment
+Then open:
+- `http://127.0.0.1:8080/` for the storefront
+- `http://127.0.0.1:8080/admin/` for Django admin (if enabled)
 
-For production, consider:
-- Using a cloud MongoDB (Atlas)
-- Setting up a process manager (e.g., Gunicorn with Uvicorn workers)
-- Securing your `.env` and using HTTPS
-- Using a vector database (Pinecone, Weaviate) for larger scales
+## Environment Setup
 
---- -->
+The backend may require environment variables such as:
+- `OPENAI_API_KEY`
+- `MONGO_URI`
+- `MONGO_DB_NAME`
 
+Create a `.env` file in the project root if needed for local development.
 
----
+## Data and AI Setup
 
-## 🙌 Contributing
+To enable full RAG functionality, run the support scripts:
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+```bash
+python scripts/seed_data.py
+python scripts/backfill_vectors.py
+python scripts/ingest_docs.py
+```
 
----
+These scripts help populate product data, generate embeddings, and ingest documents for the AI assistant.
 
-**Happy Building!** 🛍️
+## How to Use
+
+- Browse products and categories from the storefront
+- Add items to the cart and proceed to checkout
+- Register/login as a user to manage orders and settings
+- Use the AI chat interface to ask product or policy-related questions
+- Use the admin pages for store management tasks
+
+## Development Notes
+
+- The FastAPI backend is the main API layer for search and chat features.
+- The Django frontend handles the visual storefront and user/admin pages.
+- The AI assistant depends on document ingestion and vector embeddings for accurate answers.
+- If local features are not working, verify that MongoDB and required environment variables are available.
 
 

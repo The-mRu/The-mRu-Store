@@ -38,7 +38,8 @@ async def chat_with_agent(
 
     # 3. Run AI and Persist
     history = session.get("messages", [])
-    bot_response = await run_agent(message, history)
+    # WE MUST PASS THE USER ID TO THE ORCHESTRATOR
+    bot_response = await run_agent(message, history, user_id=user_id)
     
     # 4. Save back to the correct document
     await ChatRepository.update_messages(active_id, history)

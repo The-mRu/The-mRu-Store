@@ -396,10 +396,21 @@ def search_view(request):
     # We convert the cursor to a list so we can easily pass it to the Django template
     results = list(products_collection.find(mongo_query))
     
-    # --- ADDED FIX: Convert MongoDB '_id' to string 'id' for the template ---
+    # --- FIX 1: Convert MongoDB '_id' to string 'id' for the template ---
     for product in results:
         if 'id' not in product:
             product['id'] = str(product.get('_id'))
+    # -------------------------------------------------------------------------
+
+    # --- FIX 2: Ensure template never breaks on missing optional fields ---
+    DEFAULT_THUMBNAIL = "/static/images/placeholder.png"  # adjust path as needed
+    for product in results:
+        if 'thumbnail' not in product or not product['thumbnail']:
+            product['thumbnail'] = DEFAULT_THUMBNAIL
+        if 'discountPrice' not in product:
+            product['discountPrice'] = None
+        if 'rating' not in product:
+            product['rating'] = 0.0
     # -------------------------------------------------------------------------
     
     # 4. Package everything up to send to our HTML template

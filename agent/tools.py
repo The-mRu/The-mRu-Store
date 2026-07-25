@@ -1,20 +1,36 @@
 # agent/tools.py
 
 ecommerce_tools = [
+    
     {
         "type": "function",
         "function": {
             "name": "ai_omni_search",
-            "description": "Search THE-MRU-STORE database for products using a general keyword. Returns a list of matching products.",
+            "description": "Search the database for products using keywords and optional filters. Use this when the user is looking for items to buy.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "q": {
                         "type": "string",
-                        "description": "The search keyword (e.g., 'Samsung', 'Jeans', 'mouse')"
+                        "description": "The main search keyword (e.g., 'laptop', 'gaming mouse'). Leave empty if the user only specifies a brand or category."
+                    },
+                    "brand": {
+                        "type": "string",
+                        "description": "Specific brand to filter by (e.g., 'Dell', 'Lenovo')."
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Specific category to filter by."
+                    },
+                    "min_price": {
+                        "type": "number",
+                        "description": "Minimum price constraint."
+                    },
+                    "max_price": {
+                        "type": "number",
+                        "description": "Maximum price constraint."
                     }
-                },
-                "required": ["q"]
+                }
             }
         }
     },

@@ -97,11 +97,12 @@
     <div class="h-[200px] bg-gray-50 dark:bg-gray-700 flex items-center justify-center mb-4 rounded-xl overflow-hidden">
         
         <!-- ACTUAL PRODUCT IMAGE -->
-        <img 
+        <!-- <img 
             src="{{ product.image|default:product.thumbnail|default:'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image' }}" 
             alt="{{ product.name }}" 
             class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-300"
-        >
+        > -->
+        <img src="{{ product.thumbnail|default:'/static/images/placeholder.png' }}" alt="{{ product.name }}">
 
     </div>
     

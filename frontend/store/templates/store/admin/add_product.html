@@ -32,16 +32,42 @@
                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Category</label>
                     <select name="category" required class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
                         <option value="smartphones">Smartphones</option>
-                        <option value="laptops">Laptops & PCs</option>
+                        <!-- <option value="laptops">Laptops & PCs</option> -->
+                        <option value="computers">Laptops & PCs</option>
                         <option value="audio">Audio & Headphones</option>
                         <option value="mens-clothing">Men's Clothing</option>
                         <option value="womens-clothing">Women's Clothing</option>
-                        <option value="sneakers">Sneakers & Shoes</option>
+                        <!-- <option value="sneakers">Sneakers & Shoes</option> -->
+                        <option value="footwear">Sneakers & Shoes</option>
+                        <option value="kids">kids</option>
+                    </select>
+                </div>
+
+                <!-- Gender / Audience -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Gender / Audience</label>
+                    <select name="gender" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                        <option value="">-- Not specified (unisex) --</option>
+                        <option value="women">Women</option>
+                        <option value="men">Men</option>
+                        <option value="kids">Kids</option>
+                        <option value="unisex">Unisex</option>
+                    </select>
+                </div>
+
+                <!-- Brand -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Brand</label>
+                    <select name="brand" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                        <option value="">-- No brand --</option>
+                        {% for b in all_brands %}
+                            <option value="{{ b.id }}">{{ b.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
                 <!-- Image URL -->
-                <div>
+                <div class="md:col-span-2">
                     <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Image URL</label>
                     <input type="url" name="image" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://example.com/image.jpg">
                 </div>

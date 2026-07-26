@@ -1,43 +1,4 @@
-# from fastapi import APIRouter, HTTPException, Query
-# from backend.db.database import db
-
-# router = APIRouter()
-
-# @router.get("/")
-# def get_all_products():
-    
-#     products= list(db.Products.find({}, {"_id": 0}))
-#     return products
-
-# #serch products by name or category
-# @router.get("/search")
-# async def search_products(
-#     name: str = Query(None, description="Search by product name"),
-#     categoryId: str = Query(None, description="Search by product category"),
-#     brandId: str = Query(None, description="Search by product brand")
-# ):
-#     query = {}
-#     if name:
-#         query["name"] = {"$regex": name, "$options": "i"}  # Case-insensitive search
-#     if categoryId:
-#         query["categoryId"] = categoryId
-#     if brandId:
-#         query["brandId"] = brandId
-    
-#     products = list(db.Products.find(query, {"_id": 0}))
-#     if not products:
-#         raise HTTPException(status_code=404, detail="No products found matching the search criteria")
-#     return products
-
-# # Single product endpoint
-# @router.get("/{product_id}")
-# def get_product_by_id(product_id: str):
-#     product = db.Products.find_one({"id": product_id}, {"_id": 0})
-#     if not product:
-#         raise HTTPException(status_code=404, detail="Product not found")
-#     return product
-
-
+#backend/api/products.py  
 from fastapi import APIRouter, HTTPException, Query
 from backend.db.database import db
 
@@ -47,29 +8,6 @@ router = APIRouter()
 async def get_all_products():
     products = await db.Products.find({}, {"_id": 0}).to_list(length=100)
     return products
-
-# Search products by name, category, or brand
-# @router.get("/search")
-# async def search_products(
-#     name: str = Query(None, description="Search by product name"),
-#     categoryId: str = Query(None, description="Search by product category"),
-#     brandId: str = Query(None, description="Search by product brand")
-# ):
-#     query = {}
-#     if name:
-#         query["name"] = {"$regex": name, "$options": "i"}  # Case-insensitive search
-#     if categoryId:
-#         query["categoryId"] = categoryId
-#     if brandId:
-#         query["brandId"] = brandId
-    
-
-#     products = await db.Products.find(query, {"_id": 0}).to_list(length=100)
-    
-#     if not products:
-#         raise HTTPException(status_code=404, detail="No products found matching the search criteria")
-#     return products
-
 
 @router.get("/search")
 async def search_products(
@@ -102,7 +40,19 @@ async def search_products(
         
     return products
 
+@router.get("/brands")
+async def list_brands(category: str = Query(None)):
+    match = {}
+    if category:
+        cat_doc = await db.Categories.find_one({"slug": category})
+        if cat_doc:
+            # Include this category AND any subcategories under it
+            child_ids = await db.Categories.distinct("id", {"parentCategoryId": cat_doc["id"]})
+            match["categoryId"] = {"$in": [cat_doc["id"]] + child_ids}
 
+    brand_ids = await db.Products.distinct("brandId", {**match, "brandId": {"$ne": None}})
+    brands = await db.Brands.find({"id": {"$in": brand_ids}}, {"_id": 0, "name": 1}).to_list(100)
+    return [b["name"] for b in brands]
 
 ## Single product endpoint
 @router.get("/{product_id}")
@@ -112,25 +62,6 @@ async def get_product_by_id(product_id: str):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
-
-
-
-# @router.get("/{product_name}")
-# @router.get("/name/{product_name}")
-# async def get_product_by_name(product_name: str):
-#     # Using regex for a case-insensitive, exact name match
-#     product = await db.Products.find_one(
-#         {"name": {"$regex": f"^{product_name}$", "$options": "i"}}, 
-#         {"_id": 0}
-#     )
-    
-#     if not product:
-#         raise HTTPException(status_code=404, detail="Product not found")
-    
-#     return product
-
-
-
 
 
 @router.get("/name/{product_name}")

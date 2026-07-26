@@ -1,23 +1,19 @@
 # backend/api/search.py
+import re
+import math
+from collections import defaultdict
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from backend.db.database import db
 from sentence_transformers import SentenceTransformer
-import math
-from pydantic import BaseModel
-from typing import Optional
-import re
-from typing import Optional, List, Dict
 
 router = APIRouter()
-
 
 print("Loading AI Search Model...")
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
-# -------------------------------------------------------
 def calculate_similarity(v1, v2):
-    """Cosine similarity between two vectors."""
     dot_product = sum(a * b for a, b in zip(v1, v2))
     magnitude1 = math.sqrt(sum(a * a for a in v1))
     magnitude2 = math.sqrt(sum(b * b for b in v2))
@@ -26,160 +22,141 @@ def calculate_similarity(v1, v2):
     return dot_product / (magnitude1 * magnitude2)
 
 
-def normalize_text(s: str) -> str:
-    """Strip everything except letters/digits, lowercased.
-    't-shirt', 'tshirt', 't shirt' → 'tshirt'
-    """
-    return re.sub(r'[^a-z0-9]', '', s.lower())
+def rerank_rrf(vector_results, text_results, k=60):
+    scores = defaultdict(float)
+    all_docs = {}
+
+    for rank, doc in enumerate(vector_results):
+        doc_id = str(doc["_id"])
+        scores[doc_id] += 1 / (k + rank)
+        all_docs[doc_id] = doc
+
+    for rank, doc in enumerate(text_results):
+        doc_id = str(doc["_id"])
+        scores[doc_id] += 1 / (k + rank)
+        all_docs[doc_id] = doc
+
+    ranked_ids = sorted(scores.keys(), key=lambda d_id: scores[d_id], reverse=True)
+
+    final_results = []
+    for d_id in ranked_ids:
+        doc = all_docs[d_id]
+        doc.pop("embedding", None)
+        doc["_id"] = str(doc["_id"])
+        final_results.append(doc)
+
+    return final_results
 
 
-# -------------------------------------------------------
-@router.get("/", description="Omnibox search designed for AI Agents with Smart Filtering & Fallback.")
-async def ai_omni_search(
-    q: Optional[str] = Query(None, description="General search keyword(s)"),
-    brand: Optional[str] = Query(None, description="Strict brand filter"),
-    category: Optional[str] = Query(None, description="Strict category filter"),
-    min_price: Optional[float] = Query(None, description="Minimum price limit"),
-    max_price: Optional[float] = Query(None, description="Maximum price limit")
-):
-    query = {}
-    and_conditions = []
+async def resolve_category_id(category_name: str):
+    """Returns the custom `id` string field, matching how Products.categoryId is stored."""
+    doc = await db.Categories.find_one(
+        {"name": {"$regex": f"^{re.escape(category_name)}$", "$options": "i"}}
+    )
+    return doc["id"] if doc else None
 
-    # 1. Keyword search – FIXED: Handles 'ss', hyphens, and the 'tshirt' edge case
-    if q:
-        words = []
-        for w in q.strip().split():
-            if len(w) > 1:
-                # 1. Preserve words ending in 'ss' (like 'dress'), otherwise strip plural 's'
-                clean_w = w if w.lower().endswith('ss') else re.sub(r'(s|es)$', '', w, flags=re.IGNORECASE)
-                
-                # 2. Fix the T-Shirt Edge Case
-                if clean_w.lower() == "tshirt":
-                    clean_w = "t[- ]?shirt"
-                else:
-                    # 3. Make all other hyphens optional
-                    clean_w = clean_w.replace("-", "[- ]?")
-                    
-                words.append(clean_w)
-                
-        if words:
-            word_conditions = []
-            for word in words:
-                word_regex = {"$regex": word, "$options": "i"}
-                word_conditions.append({
-                    "$or": [
-                        {"name": word_regex},
-                        {"shortDescription": word_regex},
-                        {"description": word_regex}
-                    ]
-                })
-            and_conditions.extend(word_conditions)
 
-    # 2. Brand filter
-    if brand:
-        b = await _resolve_by_tokens(db.Brands, brand)
-        if b:
-            and_conditions.append({"brandId": b["id"]})
-        else:
-            and_conditions.append({"name": {"$regex": re.escape(brand.strip()), "$options": "i"}})
+async def resolve_brand_id(brand_name: str):
+    doc = await db.Brands.find_one(
+        {"name": {"$regex": f"^{re.escape(brand_name)}$", "$options": "i"}}
+    )
+    return doc["id"] if doc else None
 
-    # 3. Category filter — strict tokenized AND logic
+
+async def search_products_core(
+    q: Optional[str] = None,
+    category: Optional[str] = None,
+    gender: Optional[str] = None,
+    brand: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+) -> list:
+    hard_filter = {"status": "active"}
+
+    if gender:
+        hard_filter["gender"] = {"$in": [gender.lower(), "unisex"]}
+
     if category:
-        c = await _resolve_by_tokens(db.Categories, category)
-        if c:
-            and_conditions.append({"categoryId": c["id"]})
-        else:
-            cat_words = [re.sub(r'(s|es)$', '', w, flags=re.IGNORECASE) for w in category.strip().split() if len(w) > 1]
-            for word in cat_words:
-                and_conditions.append({"$or": [
-                    {"name": {"$regex": word, "$options": "i"}},
-                    {"description": {"$regex": word, "$options": "i"}}
-                ]})
+        cat_id = await resolve_category_id(category)
+        if cat_id:
+            hard_filter["categoryId"] = cat_id
 
-    # 4. Price range
+    if brand:
+        brand_id = await resolve_brand_id(brand)
+        if brand_id:
+            hard_filter["brandId"] = brand_id
+
     if min_price is not None or max_price is not None:
-        price_query = {}
+        hard_filter["price"] = {}
         if min_price is not None:
-            price_query["$gte"] = min_price
+            hard_filter["price"]["$gte"] = min_price
         if max_price is not None:
-            price_query["$lte"] = max_price
-        and_conditions.append({"price": price_query})
+            hard_filter["price"]["$lte"] = max_price
 
-    if and_conditions:
-        query["$and"] = and_conditions
+    text_results = []
+    if q:
+        text_query = {**hard_filter, "$text": {"$search": q}}
+        text_cursor = db.Products.find(text_query, {"score": {"$meta": "textScore"}})
+        text_cursor = text_cursor.sort([("score", {"$meta": "textScore"})]).limit(50)
+        text_results = await text_cursor.to_list(length=50)
 
-    products = await db.Products.find(query, {"_id": 0}).to_list(length=100)
+    vector_results = []
+    if q:
+        query_vector = embedding_model.encode(q).tolist()
+        candidate_docs = await db.Products.find(hard_filter).to_list(length=300)
+        scored_docs = []
 
-    # 5. Semantic fallback
-    relaxed = []
-    if not products and q:
-        products, relaxed = await _semantic_fallback(q, min_price, max_price)
+        for doc in candidate_docs:
+            vec = doc.get("embedding")
+            if not vec:
+                continue
+            score = calculate_similarity(query_vector, vec)
+            if score > 0.25:
+                doc["vectorScore"] = score
+                scored_docs.append(doc)
 
-    if not products:
-        raise HTTPException(status_code=404, detail="No products found matching these criteria.")
+        scored_docs.sort(key=lambda x: x["vectorScore"], reverse=True)
+        vector_results = scored_docs[:50]
 
-    # 6. UI defaults
+    if not text_results and not vector_results:
+        return []
+
+    final_ranked_list = rerank_rrf(vector_results, text_results)
+
     DEFAULT_THUMBNAIL = "/static/images/placeholder.png"
-    for product in products:
-        product.setdefault("thumbnail", DEFAULT_THUMBNAIL) or None
+    for product in final_ranked_list:
+        product.setdefault("thumbnail", DEFAULT_THUMBNAIL)
         if not product.get("thumbnail"):
             product["thumbnail"] = DEFAULT_THUMBNAIL
         product.setdefault("discountPrice", None)
         product.setdefault("rating", 0.0)
 
-    return {"products": products, "relaxed": relaxed} if relaxed else products
+    return final_ranked_list[:20]
 
 
-# -------------------- Helper functions --------------------
-async def _resolve_by_tokens(collection, phrase: str):
-    """Try exact match first, then require ALL words to match, not just one."""
-    # 1. Exact match attempt
-    doc = await collection.find_one({"name": {"$regex": phrase.strip(), "$options": "i"}})
-    if doc:
-        return doc
-        
-    # 2. Tokenized AND match (Strict)
-    words = [re.sub(r'(s|es)$', '', w, flags=re.IGNORECASE) for w in phrase.strip().split() if len(w) > 1]
-    if not words:
-        return None
-        
-    and_conditions = [{"name": {"$regex": word, "$options": "i"}} for word in words]
-    return await collection.find_one({"$and": and_conditions})
-
-
-async def _semantic_fallback(q: str, min_price: Optional[float], max_price: Optional[float]):
-    """Embed the query and rank products by meaning, not literal substring match."""
-    query_vector = embedding_model.encode(q).tolist()
-
-    price_query = {}
-    if min_price is not None:
-        price_query["$gte"] = min_price
-    if max_price is not None:
-        price_query["$lte"] = max_price
-    mongo_filter = {"price": price_query} if price_query else {}
-
-    cursor = db.Products.find(mongo_filter, {"_id": 0})
-    scored = []
-    async for doc in cursor:
-        vec = doc.get("embedding")
-        if not vec:
-            continue
-        score = calculate_similarity(query_vector, vec)
-        if score >= 0.40:         
-            doc.pop("embedding", None)
-            scored.append((score, doc))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    results = [doc for _, doc in scored[:20]]
-    relaxed_fields = ["keyword_match"] if results else []
-    return results, relaxed_fields
+@router.get("/")
+async def ai_omni_search(
+    q: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    gender: Optional[str] = Query(None),
+    brand: Optional[str] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
+):
+    results = await search_products_core(
+        q=q, category=category, gender=gender, brand=brand,
+        min_price=min_price, max_price=max_price
+    )
+    if not results:
+        raise HTTPException(status_code=404, detail="No products found matching these criteria.")
+    return results
 
 
 @router.get("/advanced", description="Granular search designed for frontend UI filtering.")
 async def advanced_search(
-    name: str = Query(None, description="Partial match for product name"),
-    categoryName: str = Query(None, description="Partial match for category name"),
-    brandName: str = Query(None, description="Partial match for brand name")
+    name: str = Query(None),
+    categoryName: str = Query(None),
+    brandName: str = Query(None)
 ):
     query = {}
     if name:
@@ -204,7 +181,6 @@ async def advanced_search(
 
 @router.get("/policy")
 async def search_store_policy(q: str = Query(..., description="The policy question")):
-    """Semantic search over store FAQs and policies."""
     query_vector = embedding_model.encode(q).tolist()
     cursor = db.StoreKnowledge.find()
     results = []

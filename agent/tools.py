@@ -1,5 +1,25 @@
 # agent/tools.py
+from backend.api.search import search_products_core
 
+async def ai_omni_search_impl(q, category=None, gender=None, brand=None,min_price=None, max_price=None):
+    """
+    Called directly by the orchestrator's tool-execution loop — returns a plain
+    list, never raises HTTPException, so a no-results case is just an empty
+    list the LLM can react to conversationally.
+    """
+    return await search_products_core(
+        q=q, category=category, gender=gender, brand=brand,
+        min_price=min_price, max_price=max_price
+    )
+    
+async def list_categories_impl():
+    from backend.db.database import db
+    categories = await db.Categories.find(
+        {"isActive": True, "parentCategoryId": {"$in": [None, "cat_fashion", "cat_electronics"]}},
+        {"_id": 0, "name": 1, "description": 1}
+    ).to_list(length=50)
+    return categories
+    
 ecommerce_tools = [
     {
         "type": "function",
@@ -19,8 +39,12 @@ ecommerce_tools = [
                     },
                     "category": {
                         "type": "string",
-                        # "description": "Intelligently map the user's request to one of these EXACT store categories: 'Smartphones', 'Laptops & PCs', 'Headphones', 'Men\\'s Clothing', 'Women\\'s Clothing', 'Sneakers & Shoes'. For example, if the user asks for 'female' or 'girls', map it to 'Women\\'s Clothing'."
-                        "description": "ONLY use this filter if the user explicitly specifies a demographic (e.g., 'men', 'women', 'kids'). Do NOT guess or infer categories for items. If the user just asks for 't-shirts', 'laptops', or 'shoes', leave this completely blank!"
+                        "description":(
+                                    "ONLY use this filter if the user explicitly specifies a demographic or the 'Kids' section "
+                                    "(e.g. 'men', 'women', 'kids', 'toys', 'kids clothing'). Map any children's item — clothing, "
+                                    "toys, shoes, anything — to the 'Kids' category. Do NOT guess or infer categories otherwise. "
+                                    "If the user just asks for 't-shirts', 'laptops', or 'shoes' with no age/gender context, leave this blank."
+                                )
                     },
                     "min_price": {
                         "type": "number",
@@ -34,10 +58,32 @@ ecommerce_tools = [
             }
         }
     },
-    
-    
-    
-    
+    {
+    "type": "function",
+    "function": {
+        "name": "list_categories",
+        "description": (
+            "Returns the full list of product categories available in the store. "
+            "Use this when the user asks broad discovery questions like 'what do you sell', "
+            "'what categories do you have', 'what kind of products are available', or similar — "
+            "anything where they want an overview rather than a specific search."
+        ),
+        "parameters": {"type": "object", "properties": {}}
+    }
+    },
+    {
+    "type": "function",
+    "function": {
+        "name": "list_brands",
+        "description": "Returns the actual brand names available in the store, optionally filtered by category. Use whenever the user asks 'which brands', 'what companies', or similar — NEVER answer this from memory.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Category slug to filter by, e.g. 'footwear'. Omit for all brands."}
+            }
+        }
+    }
+    },
 
     {
         "type": "function",

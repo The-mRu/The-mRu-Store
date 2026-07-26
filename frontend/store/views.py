@@ -4,16 +4,14 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.forms import AuthenticationForm
 from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import FileSystemStorage
-import re as _regex
+from django.contrib import messages
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 import json
 import requests
 import os
-from datetime import datetime
-
-from pymongo import MongoClient
-from bson.objectid import ObjectId  
 import uuid
-from bson.objectid import ObjectId
+from datetime import datetime
 
 
 from .services import (
@@ -40,43 +38,11 @@ carts_collection = db['Carts']
 products_collection = db['Products']
 cart_items_collection = db['CartItems']
 
-from sentence_transformers import SentenceTransformer
-
-# Load once at module import time — NOT inside the view function,
-# or you reload the model on every single product save.
-_embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 
-def build_search_text(name, category_name, gender, description, brand_name=None):
-    gender_str = gender or "unisex"
-    brand_str = f" | brand: {brand_name}" if brand_name else ""
-    return f"{name} | category: {category_name} | for: {gender_str}{brand_str} | {description}"
 
-def resolve_category(category_slug):
-    doc = db['Categories'].find_one({"slug": category_slug})
-    if doc:
-        return doc["id"], doc["name"]
-    return None, category_slug
 
-def resolve_brand(brand_name: str | None):
-    if not brand_name:
-        return None, None
-    clean_name = brand_name.strip()
-    doc = db['Brands'].find_one(
-        {"name": {"$regex": f"^{_regex.escape(clean_name)}$", "$options": "i"}}
-    )
-    if doc:
-        return doc["id"], doc["name"]
-
-    # No match — create a new brand automatically instead of leaving it orphaned
-    new_brand_id = f"brand_{clean_name.lower().replace(' ', '_')}"
-    db['Brands'].insert_one({
-        "id": new_brand_id,
-        "name": clean_name,
-        "slug": clean_name.lower().replace(' ', '-')
-    })
-    return new_brand_id, clean_name
 
 
 def register_view(request):
@@ -1079,166 +1045,81 @@ def admin_delete_product(request, product_id):
     return redirect('admin_products')
 
 
-from datetime import datetime
-from django.shortcuts import render, redirect
-from django.contrib import messages
+
 
 def admin_add_product_view(request):
     if not request.session.get('admin_id'):
         return redirect('admin_login')
 
     if request.method == 'POST':
-        name = request.POST.get('name')
-        category_slug = request.POST.get('category')
-        gender = request.POST.get('gender') or None
-        brand_id = request.POST.get('brand') or None       # now a brand ID, not a name
-
         try:
             price = float(request.POST.get('price', 0))
             stock = int(request.POST.get('stock', 0))
         except ValueError:
             price, stock = 0.0, 0
 
-        image_url = request.POST.get('image')
-        description = request.POST.get('description')
-        custom_id = f"prod_custom_{uuid.uuid4().hex[:6]}"
-
-        # Resolve category (same as before)
-        category_id, category_name = resolve_category(category_slug)
-
-        # Resolve brand – just look up the name from the ID
-        brand_name = None
-        if brand_id:
-            brand_doc = db['Brands'].find_one({"id": brand_id})
-            if brand_doc:
-                brand_name = brand_doc["name"]
-
-        # Build enriched search text
-        search_text = build_search_text(
-            name, category_name, gender, description, brand_name
-        )
-        embedding = _embedding_model.encode(search_text).tolist()
-
-        new_product = {
-            "id": custom_id,
-            "name": name,
-            "categoryId": category_id,
-            "category": category_name,
-            "brandId": brand_id,
-            "brand": brand_name,
-            "gender": gender,
+        payload = {
+            "name": request.POST.get('name'),
+            "category": request.POST.get('category'),
+            "gender": request.POST.get('gender'),
+            "brand_id": request.POST.get('brand') or None,
             "price": price,
             "stock": stock,
-            "thumbnail": image_url,
-            "image": image_url,
-            "description": description,
-            "shortDescription": description[:150] if description else "",
-            "searchText": search_text,
-            "embedding": embedding,
-            "createdAt": datetime.now(),
-            "status": "active"
+            "image": request.POST.get('image'),
+            "description": request.POST.get('description'),
         }
+        response = requests.post(f"{FASTAPI_BASE_URL}/products/", json=payload)
+        data = response.json()
 
-        db['Products'].insert_one(new_product)
-
-        # Flash messages
-        warnings = []
-        if not category_id:
-            warnings.append(f'Category "{category_slug}" not recognized.')
-        if brand_id and not brand_name:
-            warnings.append(f'Brand with ID "{brand_id}" not found.')
-        if warnings:
-            messages.warning(request, ' '.join(warnings) + f' Product "{name}" added anyway.')
+        name = payload["name"]
+        if data.get("warnings"):
+            messages.warning(request, " ".join(data["warnings"]) + f' Product "{name}" added anyway.')
         else:
             messages.success(request, f'Product "{name}" added successfully!')
-
         return redirect('admin_products')
 
-    # GET – fetch all brands for the dropdown
-    all_brands = list(db['Brands'].find({}, {"id": 1, "name": 1}))
+    all_brands = requests.get(f"{FASTAPI_BASE_URL}/products/brands/full").json()  
     return render(request, 'store/admin/add_product.html', {'all_brands': all_brands})
-
-from bson.objectid import ObjectId   # only if not already imported at the top
 
 def admin_edit_product_view(request, product_id):
     if not request.session.get('admin_id'):
         return redirect('admin_login')
 
-    # Build query to find the product
-    try:
-        query = {"_id": ObjectId(product_id)}
-    except Exception:
-        query = {"id": product_id}
-
-    product = db['Products'].find_one(query)
-    if not product:
+    product_resp = requests.get(f"{FASTAPI_BASE_URL}/products/{product_id}")
+    if product_resp.status_code == 404:
         messages.error(request, "Product not found.")
         return redirect('admin_products')
+    product = product_resp.json()
+    product['str_id'] = product['_id']
 
     if request.method == 'POST':
-        name = request.POST.get('name')
-        category_slug = request.POST.get('category')
-        gender = request.POST.get('gender') or None
-        brand_id = request.POST.get('brand') or None
-
         try:
             price = float(request.POST.get('price', 0))
             stock = int(request.POST.get('stock', 0))
         except ValueError:
             price, stock = 0.0, 0
 
-        image_url = request.POST.get('image')
-        description = request.POST.get('description')
-
-        category_id, category_name = resolve_category(category_slug)
-
-        brand_name = None
-        if brand_id:
-            brand_doc = db['Brands'].find_one({"id": brand_id})
-            if brand_doc:
-                brand_name = brand_doc["name"]
-
-        search_text = build_search_text(
-            name, category_name, gender, description, brand_name
-        )
-        embedding = _embedding_model.encode(search_text).tolist()
-
-        update_data = {
-            "name": name,
-            "categoryId": category_id,
-            "category": category_name,
-            "brandId": brand_id,
-            "brand": brand_name,
-            "gender": gender,
+        payload = {
+            "name": request.POST.get('name'),
+            "category": request.POST.get('category'),
+            "gender": request.POST.get('gender'),
+            "brand_id": request.POST.get('brand') or None,
             "price": price,
             "stock": stock,
-            "thumbnail": image_url,
-            "image": image_url,
-            "description": description,
-            "shortDescription": description[:150] if description else "",
-            "searchText": search_text,
-            "embedding": embedding,
-            "updatedAt": datetime.now()
+            "image": request.POST.get('image'),
+            "description": request.POST.get('description'),
         }
 
-        db['Products'].update_one(query, {"$set": update_data})
-
-        warnings = []
-        if not category_id:
-            warnings.append(f'Category "{category_slug}" not recognized.')
-        if brand_id and not brand_name:
-            warnings.append(f'Brand with ID "{brand_id}" not found.')
-        if warnings:
-            messages.warning(request, ' '.join(warnings) + f' Product "{name}" updated anyway.')
+        response = requests.put(f"{FASTAPI_BASE_URL}/products/{product_id}", json=payload)
+        if response.status_code == 200:
+            messages.success(request, f'Product "{payload["name"]}" updated successfully!')
         else:
-            messages.success(request, f'Product "{name}" updated successfully!')
-
+            messages.error(request, f'Update failed: {response.status_code} — {response.text}')
         return redirect('admin_products')
 
-    # GET – prepare product and brand list for the template
-    product['str_id'] = str(product['_id'])
-    all_brands = list(db['Brands'].find({}, {"id": 1, "name": 1}))
+    all_brands = requests.get(f"{FASTAPI_BASE_URL}/products/brands/full").json()
     return render(request, 'store/admin/edit_product.html', {'product': product, 'all_brands': all_brands})
+
 
 def admin_orders_view(request):
     # 1. Security Check

@@ -19,7 +19,7 @@ if not api_key:
 client = AsyncOpenAI(api_key=api_key)
 
 
-# --- UPDATED: Dynamic System Prompt injected with User Context ---
+# --- Dynamic System Prompt injected with User Context ---
 def get_dynamic_system_prompt(user_id: str = None):
     auth_status = f"LOGGED IN USER (ID: {user_id})" if user_id else "GUEST USER (No ID available)"
     
@@ -46,13 +46,18 @@ CORE RULES & GUARDRAILS:
    - UPDATES: If a user provides extra context for an ongoing issue, use `add_ticket_comment`.
    - CLOSING: If a user says their problem is fixed or they want to cancel a ticket, use `close_support_ticket`.
    - ESCALATION: If the user explicitly asks for a human, expresses severe frustration, or is angry about a ticket, use `escalate_ticket` to alert the admin team.
+6.SEARCH & FILTER RULES:
+- Only apply min_price/max_price, brand, or category filters if the user states them in their CURRENT message, 
+  or explicitly says to reuse a previous constraint (e.g. "same budget as before", "still under $80").
+- Do NOT silently carry forward a price range, brand, or category from an earlier turn into a new, 
+  unrelated product search. If the user changes what they're looking for, treat filters as reset 
+  unless they say otherwise.
+- If you are not sure whether a previously mentioned filter still applies, ASK the user rather than assuming.
 
-- MANDATORY VERIFICATION: If the user provides an Order ID, call `check_order_status` first. 
-   - GENERAL ISSUES: If the user has a general account issue (not related to an order), you do not need to verify an order. Set orderId to 'N/A'.
 """
 
 
-# --- UPDATED: Added user_id parameter ---
+# --- Main agent runner (injects trusted user_id) ---
 async def run_agent(user_message: str, message_history: list, user_id: str = None):
     # 1. Add user message to the active session history
     message_history.append({"role": "user", "content": user_message})
@@ -60,7 +65,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
     MAX_HISTORY_LENGTH = 10
     working_memory = message_history[-MAX_HISTORY_LENGTH:]
     
-    # --- UPDATED: Inject dynamic prompt based on user_id ---
+    # Inject dynamic system prompt based on authenticated user
     system_prompt = {"role": "system", "content": get_dynamic_system_prompt(user_id)}
     if working_memory[0].get("role") == "system":
         working_memory[0] = system_prompt
@@ -82,84 +87,98 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
 
     # 3. Intercept Tool Calls
     if ai_message.tool_calls:
+        # Tools that require a logged-in user
+        AUTH_REQUIRED_TOOLS = {
+            "check_order_status", "create_support_ticket", "check_ticket_status",
+            "add_ticket_comment", "close_support_ticket", "escalate_ticket",
+        }
+
         async with httpx.AsyncClient(follow_redirects=True) as http_client:
             for tool_call in ai_message.tool_calls:
                 function_name = tool_call.function.name
                 arguments = json.loads(tool_call.function.arguments)
-                
+
                 print(f"⚡ Executing API Tool: {function_name} | Args: {arguments}")
-                
+
                 api_response_data = None
-                
-                # 4. Execute local FastAPI network requests
-                try:
-                    # if function_name == "ai_omni_search":
-                    #     res = await http_client.get(f"{API_BASE_URL}/search/", params={"q": arguments["q"]})
-                    #     api_response_data = res.json()
-                        
-                    if function_name == "ai_omni_search":
-                        res = await http_client.get(f"{API_BASE_URL}/search/", params=arguments)
-                        api_response_data = res.json()
-                        
-                    elif function_name == "get_product_by_id":
-                        res = await http_client.get(f"{API_BASE_URL}/products/{arguments['product_id']}")
-                        api_response_data = res.json()
-                        
-                    # --- NEW: Check Order Status Tool ---
-                    elif function_name == "check_order_status":
-                        res = await http_client.get(f"{API_BASE_URL}/orders/{arguments['orderId']}", params={"user_id": user_id})
-                        api_response_data = res.json()
 
-                    elif function_name == "create_support_ticket":
-                        res = await http_client.post(f"{API_BASE_URL}/support-tickets/", json=arguments)
-                        api_response_data = res.json()
-                    
-                    elif function_name == "search_store_policy":
-                        res = await http_client.get(f"{API_BASE_URL}/search/policy", params={"q": arguments["q"]})
-                        api_response_data = res.json()
-                        
-                    elif function_name == "check_ticket_status":
-                        # Hit the FastAPI endpoint to fetch the ticket
-                        res = await http_client.get(
-                            f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}", 
-                            params={"user_id": arguments["userId"]}
-                        )
-                        api_response_data = res.json()
-                    # --- NEW SUPPORT TOOLS ---
-                    elif function_name == "add_ticket_comment":
-                        res = await http_client.post(
-                            f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/comments", 
-                            json={"user_id": arguments["userId"], "comment": arguments["comment"]}
-                        )
-                        api_response_data = res.json()
+                # --- HARD AUTH GATE ---
+                if function_name in AUTH_REQUIRED_TOOLS and not user_id:
+                    api_response_data = {
+                        "error": "AUTH_REQUIRED",
+                        "message": "This action requires the user to be logged in."
+                    }
+                else:
+                    try:
+                        if function_name == "ai_omni_search":
+                            # FIX: forward all search filters (brand, category, min/max price)
+                            res = await http_client.get(f"{API_BASE_URL}/search/", params=arguments)
+                            api_response_data = res.json()
 
-                    elif function_name == "close_support_ticket":
-                        res = await http_client.patch(
-                            f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/close",
-                            params={"user_id": arguments["userId"]}
-                        )
-                        api_response_data = res.json()
+                        elif function_name == "get_product_by_id":
+                            res = await http_client.get(f"{API_BASE_URL}/products/{arguments['product_id']}")
+                            api_response_data = res.json()
 
-                    elif function_name == "escalate_ticket":
-                        res = await http_client.patch(
-                            f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/escalate",
-                            params={"user_id": arguments["userId"]},
-                            json={"reason": arguments["reason"]}
-                        )
-                        api_response_data = res.json()
-                        
-                except Exception as e:
-                    api_response_data = {"error": str(e)}
-                    
+                        elif function_name == "check_order_status":
+                            # user_id is trusted server-side, never from the model
+                            res = await http_client.get(
+                                f"{API_BASE_URL}/orders/{arguments['orderId']}",
+                                params={"user_id": user_id}
+                            )
+                            api_response_data = res.json()
+
+                        elif function_name == "create_support_ticket":
+                            # Inject the trusted user_id, ignore any model-supplied one
+                            payload = {**arguments, "userId": user_id}
+                            res = await http_client.post(f"{API_BASE_URL}/support-tickets/", json=payload)
+                            api_response_data = res.json()
+
+                        elif function_name == "search_store_policy":
+                            res = await http_client.get(f"{API_BASE_URL}/search/policy", params={"q": arguments["q"]})
+                            api_response_data = res.json()
+
+                        elif function_name == "check_ticket_status":
+                            res = await http_client.get(
+                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}",
+                                params={"user_id": user_id}
+                            )
+                            api_response_data = res.json()
+
+                        elif function_name == "add_ticket_comment":
+                            res = await http_client.post(
+                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/comments",
+                                json={"user_id": user_id, "comment": arguments["comment"]}
+                            )
+                            api_response_data = res.json()
+
+                        elif function_name == "close_support_ticket":
+                            res = await http_client.patch(
+                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/close",
+                                params={"user_id": user_id}
+                            )
+                            api_response_data = res.json()
+
+                        elif function_name == "escalate_ticket":
+                            res = await http_client.patch(
+                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/escalate",
+                                params={"user_id": user_id},
+                                json={"reason": arguments["reason"]}
+                            )
+                            api_response_data = res.json()
+
+                    except Exception as e:
+                        api_response_data = {"error": str(e)}
+
                 # --- TOKEN PROTECTION SCRUBBER ---
-                # Strip out the massive embedding arrays so they don't crash OpenAI
+                # Remove massive embedding arrays to avoid blowing the context window
                 if isinstance(api_response_data, list):
                     for item in api_response_data:
-                        item.pop("embedding", None)
+                        if isinstance(item, dict):
+                            item.pop("embedding", None)
                 elif isinstance(api_response_data, dict):
                     api_response_data.pop("embedding", None)
 
-                # 5. Append the raw database JSON to the conversation
+                # Append tool result to working memory
                 working_memory.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -167,20 +186,19 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                     "content": json.dumps(api_response_data)
                 })
 
-        # 6. Second OpenAI Call (Synthesizing the final answer)
+        # 4. Second OpenAI Call (Synthesizing the final answer)
         print("🧠 Translating database JSON into natural language...")
         final_response = await client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=working_memory 
+            messages=working_memory
         )
         
         final_text = final_response.choices[0].message.content
         
-        # Save the final text to the permanent database history
+        # Save the final text to the permanent session history
         message_history.append({"role": "assistant", "content": final_text})
         return final_text
 
+    # No tool calls – direct model answer
     message_history.append({"role": "assistant", "content": ai_message.content})
     return ai_message.content
-
-

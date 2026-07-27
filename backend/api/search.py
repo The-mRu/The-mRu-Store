@@ -49,7 +49,6 @@ def rerank_rrf(vector_results, text_results, k=60):
 
 
 async def resolve_category_id(category_name: str):
-    """Returns the custom `id` string field, matching how Products.categoryId is stored."""
     doc = await db.Categories.find_one(
         {"name": {"$regex": f"^{re.escape(category_name)}$", "$options": "i"}}
     )
@@ -63,14 +62,7 @@ async def resolve_brand_id(brand_name: str):
     return doc["id"] if doc else None
 
 
-async def search_products_core(
-    q: Optional[str] = None,
-    category: Optional[str] = None,
-    gender: Optional[str] = None,
-    brand: Optional[str] = None,
-    min_price: Optional[float] = None,
-    max_price: Optional[float] = None,
-) -> list:
+async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
     hard_filter = {"status": "active"}
 
     if gender:
@@ -134,6 +126,43 @@ async def search_products_core(
     return final_ranked_list[:20]
 
 
+async def search_products_core(
+    q: Optional[str] = None,
+    category: Optional[str] = None,
+    gender: Optional[str] = None,
+    brand: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+) -> dict:
+    """Returns {"products": [...], "relaxed": [...]}."""
+    results = await _run_search(q, category, gender, brand, min_price, max_price)
+    if results:
+        return {"products": results, "relaxed": []}
+
+    relaxed_applied = []
+    current = {"q": q, "category": category, "gender": gender, "brand": brand,
+               "min_price": min_price, "max_price": max_price}
+
+    relax_order = ["brand", "gender", "price"]
+    for field in relax_order:
+        if field == "price":
+            if current["min_price"] is None and current["max_price"] is None:
+                continue
+            current["min_price"] = None
+            current["max_price"] = None
+        else:
+            if not current.get(field):
+                continue
+            current[field] = None
+
+        relaxed_applied.append(field)
+        results = await _run_search(**current)
+        if results:
+            return {"products": results, "relaxed": relaxed_applied}
+
+    return {"products": [], "relaxed": relaxed_applied}
+
+
 @router.get("/")
 async def ai_omni_search(
     q: Optional[str] = Query(None),
@@ -143,13 +172,13 @@ async def ai_omni_search(
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
 ):
-    results = await search_products_core(
+    result = await search_products_core(
         q=q, category=category, gender=gender, brand=brand,
         min_price=min_price, max_price=max_price
     )
-    if not results:
+    if not result["products"]:
         raise HTTPException(status_code=404, detail="No products found matching these criteria.")
-    return results
+    return result
 
 
 @router.get("/advanced", description="Granular search designed for frontend UI filtering.")

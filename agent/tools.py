@@ -12,6 +12,8 @@ async def ai_omni_search_impl(q, category=None, gender=None, brand=None,min_pric
         min_price=min_price, max_price=max_price
     )
     
+
+    
 async def list_categories_impl():
     from backend.db.database import db
     categories = await db.Categories.find(

@@ -1,3 +1,4 @@
+# main_db_server.py
 from fastapi import FastAPI
 from backend.api import auth, cart, products, categories, orders, reviews, support_tickets, inventory, analytics, users, search, chat
 from fastapi.middleware.cors import CORSMiddleware

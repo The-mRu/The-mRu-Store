@@ -47,11 +47,20 @@ def rerank_rrf(vector_results, text_results, k=60):
 
 
 async def resolve_category_id(category_name: str):
+    """Returns categoryId(s) to filter by — includes subcategories if the match is a parent category."""
     doc = await db.Categories.find_one(
-        {"name": {"$regex": f"^{re.escape(category_name)}$", "$options": "i"}}
+        {"$or": [
+            {"name": {"$regex": f"^{re.escape(category_name)}$", "$options": "i"}},
+            {"slug": category_name}
+        ]}
     )
-    return doc["id"] if doc else None
+    if not doc:
+        return None
 
+    child_ids = await db.Categories.distinct("id", {"parentCategoryId": doc["id"]})
+    if child_ids:
+        return {"$in": [doc["id"]] + child_ids}
+    return doc["id"]
 
 async def resolve_brand_id(brand_name: str):
     doc = await db.Brands.find_one(

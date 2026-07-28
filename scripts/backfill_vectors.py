@@ -9,6 +9,18 @@ db = client["amazon_clone_db"]
 print("Loading Embedding Model...")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
+
+def build_search_text(name, cat_name, gender, brand_name, warranty, rating, tags, desc):
+    gender_str = gender or "unisex"
+    brand_str = f" | brand: {brand_name}" if brand_name else ""
+    warranty_str = f" | warranty: {warranty}" if warranty and warranty != "No Warranty" else ""
+    rating_str = f" | rating: {rating}" if rating and rating > 0 else ""
+    return (
+        f"{name} | category: {cat_name} | for: {gender_str}{brand_str}{warranty_str}{rating_str} | "
+        f"tags: {tags} | {desc}"
+    )
+
+
 def backfill_products(force=False):
     query = {} if force else {
         "$or": [
@@ -25,17 +37,15 @@ def backfill_products(force=False):
         gender = product.get("gender") or "unisex"
         desc = product.get("shortDescription") or product.get("description", "")
         tags = ", ".join(product.get("tags", []))
+        warranty = product.get("warranty")
+        rating = product.get("rating")
 
         brand_name = None
         if product.get("brandId"):
             brand_doc = db.Brands.find_one({"id": product["brandId"]})
             brand_name = brand_doc["name"] if brand_doc else None
-        brand_str = f" | brand: {brand_name}" if brand_name else ""
 
-        search_text = (
-            f"{name} | category: {cat_name} | for: {gender}{brand_str} | "
-            f"tags: {tags} | {desc}"
-        )
+        search_text = build_search_text(name, cat_name, gender, brand_name, warranty, rating, tags, desc)
         embedding = model.encode(search_text).tolist()
 
         db.Products.update_one(
@@ -46,6 +56,7 @@ def backfill_products(force=False):
         count += 1
 
     print(f"Processed {count} product(s).")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

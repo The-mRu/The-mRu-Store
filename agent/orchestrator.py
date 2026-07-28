@@ -238,7 +238,9 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             # print(f"DEBUG list_brands raw response: {res.json()}")
                             api_response_data = res.json()
                             # print(f"DEBUG list_brands processed response: {api_response_data}")
-                        
+                        elif function_name == "get_product_reviews":
+                            res = await http_client.get(f"{API_BASE_URL}/reviews/summary/{arguments['product_id']}")
+                            api_response_data = res.json()
                     
                     except Exception as e:
                         print(f"DEBUG list_brands EXCEPTION: {type(e).__name__}: {e}")

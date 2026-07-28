@@ -16,11 +16,12 @@ router = APIRouter()
 
 # -------------------- Core reusable logic --------------------
 
-def build_search_text(name, category_name, gender, description, brand_name=None):
+def build_search_text(name, category_name, gender, description, brand_name=None, warranty=None, rating=None):
     gender_str = gender or "unisex"
     brand_str = f" | brand: {brand_name}" if brand_name else ""
-    return f"{name} | category: {category_name} | for: {gender_str}{brand_str} | {description}"
-
+    warranty_str = f" | warranty: {warranty}" if warranty and warranty != "No Warranty" else ""
+    rating_str = f" | rating: {rating}" if rating and rating > 0 else ""
+    return f"{name} | category: {category_name} | for: {gender_str}{brand_str}{warranty_str}{rating_str} | {description}"
 
 async def resolve_category(category_slug: str):
     doc = await db.Categories.find_one({"slug": category_slug})
@@ -145,7 +146,10 @@ async def create_product(payload: ProductWrite):
     category_id, category_name = await resolve_category(payload.category)
     brand_id, brand_name = await resolve_brand(brand_name=payload.brand_name, brand_id=payload.brand_id)
 
-    search_text = build_search_text(payload.name, category_name, payload.gender, payload.description, brand_name)
+    search_text = build_search_text(
+        payload.name, category_name, payload.gender, payload.description, brand_name,
+        warranty=payload.warranty, rating=None 
+        )
     embedding = embedding_model.encode(search_text).tolist()
 
     product = {
@@ -186,7 +190,10 @@ async def update_product(product_id: str, payload: ProductWrite):
     category_id, category_name = await resolve_category(payload.category)
     brand_id, brand_name = await resolve_brand(brand_name=payload.brand_name, brand_id=payload.brand_id)
 
-    search_text = build_search_text(payload.name, category_name, payload.gender, payload.description, brand_name)
+    search_text = build_search_text(
+            payload.name, category_name, payload.gender, payload.description, brand_name,
+            warranty=payload.warranty, rating=None 
+            ) 
     embedding = embedding_model.encode(search_text).tolist()
 
     update_data = {

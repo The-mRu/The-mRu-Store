@@ -5,7 +5,7 @@ ecommerce_tools = [
         "type": "function",
         "function": {
             "name": "ai_omni_search",
-            "description": "Search the database for products using keywords and optional filters. Use this when the user is looking for items to buy.",
+            "description": "Search the product catalog. Use this whenever the user wants to see or browse actual products — including 'show me [brand] products', '[brand] [category]', or any request implying they want a product list, not just a list of brand names.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -55,7 +55,7 @@ ecommerce_tools = [
     "type": "function",
     "function": {
         "name": "list_brands",
-        "description": "Category name or common phrasing, e.g. 'laptops', 'computers', 'sneakers', 'electronics'. Will be matched against the store's real category names.",
+        "description": "Lists brand NAMES available in a category — use ONLY for browse questions like 'what brands do you carry' or 'which companies make X'. Do NOT use this when the user wants to see actual products from a brand (e.g. 'show me Apple products', 'Nike shoes') — use ai_omni_search with the brand filter for that instead.",
         "parameters": {
             "type": "object",
             "properties": {

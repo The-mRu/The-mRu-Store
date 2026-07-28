@@ -9,9 +9,9 @@ from backend.db.database import db
 from sentence_transformers import SentenceTransformer
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
+from backend.api.ml_core import embedding_model
 
 router = APIRouter()
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 # -------------------- Core reusable logic --------------------
@@ -61,14 +61,14 @@ class ProductWrite(BaseModel):
     name: str
     category: str
     gender: Optional[str] = "unisex"
-    brand_id: Optional[str] = None      # dropdown-selected brand id
-    brand_name: Optional[str] = None    # free-text fallback (bulk imports, etc.)
+    brand_id: Optional[str] = None
+    brand_name: Optional[str] = None
     price: float
     stock: int
     image: Optional[str] = None
     description: Optional[str] = None
-
-
+    warranty: Optional[str] = None
+    
 # -------------------- Read endpoints --------------------
 
 @router.get("/")

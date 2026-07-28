@@ -1020,18 +1020,23 @@ def admin_add_product_view(request):
             price, stock = 0.0, 0
 
         payload = {
-            "name": request.POST.get('name'),
-            "category": request.POST.get('category'),
-            "gender": request.POST.get('gender'),
-            "brand_id": request.POST.get('brand') or None,
-            "price": price,
-            "stock": stock,
-            "image": request.POST.get('image'),
-            "description": request.POST.get('description'),
-        }
+    "name": request.POST.get('name'),
+    "category": request.POST.get('category'),
+    "gender": request.POST.get('gender'),
+    "brand_id": request.POST.get('brand') or None,
+    "price": price,
+    "stock": stock,
+    "image": request.POST.get('image'),
+    "description": request.POST.get('description'),
+    "warranty": request.POST.get('warranty') or None,
+}
         response = requests.post(f"{FASTAPI_BASE_URL}/products/", json=payload)
-        data = response.json()
 
+        if response.status_code != 200 or not response.text:
+            messages.error(request, f"Failed to create product. Server returned: {response.status_code} — {response.text[:300]}")
+            return redirect('admin_products')
+
+        data = response.json()
         name = payload["name"]
         if data.get("warnings"):
             messages.warning(request, " ".join(data["warnings"]) + f' Product "{name}" added anyway.')
@@ -1039,7 +1044,7 @@ def admin_add_product_view(request):
             messages.success(request, f'Product "{name}" added successfully!')
         return redirect('admin_products')
 
-    all_brands = requests.get(f"{FASTAPI_BASE_URL}/products/brands/full").json()  
+    all_brands = requests.get(f"{FASTAPI_BASE_URL}/products/brands/full").json()
     return render(request, 'store/admin/add_product.html', {'all_brands': all_brands})
 
 def admin_edit_product_view(request, product_id):
@@ -1061,15 +1066,16 @@ def admin_edit_product_view(request, product_id):
             price, stock = 0.0, 0
 
         payload = {
-            "name": request.POST.get('name'),
-            "category": request.POST.get('category'),
-            "gender": request.POST.get('gender'),
-            "brand_id": request.POST.get('brand') or None,
-            "price": price,
-            "stock": stock,
-            "image": request.POST.get('image'),
-            "description": request.POST.get('description'),
-        }
+    "name": request.POST.get('name'),
+    "category": request.POST.get('category'),
+    "gender": request.POST.get('gender'),
+    "brand_id": request.POST.get('brand') or None,
+    "price": price,
+    "stock": stock,
+    "image": request.POST.get('image'),
+    "description": request.POST.get('description'),
+    "warranty": request.POST.get('warranty') or None,
+}
 
         response = requests.put(f"{FASTAPI_BASE_URL}/products/{product_id}", json=payload)
         if response.status_code == 200:

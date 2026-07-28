@@ -65,6 +65,24 @@
                     {% endfor %}
                 </select>
             </div>
+            <!-- Warranty -->
+<div>
+    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Warranty</label>
+    <select name="warranty" class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+        <option value="" {% if not product.warranty %}selected{% endif %}>-- No warranty --</option>
+        <option value="No Warranty" {% if product.warranty == "No Warranty" %}selected{% endif %}>No Warranty</option>
+        <option value="7 Days" {% if product.warranty == "7 Days" %}selected{% endif %}>7 Days</option>
+        <option value="15 Days" {% if product.warranty == "15 Days" %}selected{% endif %}>15 Days</option>
+        <option value="1 Month" {% if product.warranty == "1 Month" %}selected{% endif %}>1 Month</option>
+        <option value="3 Months" {% if product.warranty == "3 Months" %}selected{% endif %}>3 Months</option>
+        <option value="6 Months" {% if product.warranty == "6 Months" %}selected{% endif %}>6 Months</option>
+        <option value="1 Year" {% if product.warranty == "1 Year" %}selected{% endif %}>1 Year</option>
+        <option value="2 Years" {% if product.warranty == "2 Years" %}selected{% endif %}>2 Years</option>
+        <option value="3 Years" {% if product.warranty == "3 Years" %}selected{% endif %}>3 Years</option>
+        <option value="5 Years" {% if product.warranty == "5 Years" %}selected{% endif %}>5 Years</option>
+        <option value="Lifetime" {% if product.warranty == "Lifetime" %}selected{% endif %}>Lifetime</option>
+    </select>
+</div>
 
                 <!-- Image URL -->
                 <div class="md:col-span-2">

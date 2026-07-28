@@ -89,7 +89,7 @@
                                     
                                     <td class="p-5 text-sm text-gray-600 dark:text-gray-300 font-medium truncate max-w-[150px]">
     {% if order.item_count == 1 %}
-        {{ order.items.0.name|default:order.items.0.productId }}
+        {{ first_item.name|default:"Item unavailable" }}
     {% else %}
         {{ order.item_count }} items
     {% endif %}

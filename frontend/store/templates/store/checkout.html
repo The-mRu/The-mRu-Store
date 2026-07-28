@@ -1,3 +1,4 @@
+<!-- frontend/store/templates/store/checkout.html -->
 {% extends 'store/base.html' %}
 
 {% block content %}
@@ -258,6 +259,14 @@
 
         const finalTotal = parseFloat(document.getElementById('checkout-final-total').innerText);
 
+        // --- FIX: Calculate exact subtotal and shipping fee for the API payload ---
+        let submitSubtotal = 0;
+        checkoutItems.forEach(item => {
+            submitSubtotal += (item.quantity * cleanPrice(item.price));
+        });
+        const submitShippingFee = checkoutItems.length > 0 ? 120.00 : 0;
+        // ---------------------------------------------------------------------
+
         try {
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
             const response = await fetch('/api/orders/place/', {
@@ -274,8 +283,11 @@
                         name: item.name,
                         price: item.price
                     })), 
-                    shipping: shippingData,
-                    total: finalTotal
+                    shipping_address: shippingData,
+                    payment_method: "Cash on Delivery",
+                    subtotal: submitSubtotal,
+                    discount: 0,
+                    shipping_fee: submitShippingFee
                 })
             });
 

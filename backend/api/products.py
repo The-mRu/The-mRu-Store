@@ -97,11 +97,19 @@ async def search_products(q: str = Query(...)):
     return products
 
 
+
+
 @router.get("/brands")
 async def list_brands(category: str = Query(None)):
     match = {}
     if category:
-        cat_doc = await db.Categories.find_one({"slug": category})
+        cat_doc = await db.Categories.find_one({
+            "$or": [
+                {"slug": category},
+                {"slug": {"$regex": f"^{re.escape(category)}", "$options": "i"}},
+                {"name": {"$regex": re.escape(category), "$options": "i"}}
+            ]
+        })
         if not cat_doc:
             return []
         child_ids = await db.Categories.distinct("id", {"parentCategoryId": cat_doc["id"]})
@@ -110,6 +118,9 @@ async def list_brands(category: str = Query(None)):
     brand_ids = await db.Products.distinct("brandId", {**match, "brandId": {"$ne": None}})
     brands = await db.Brands.find({"id": {"$in": brand_ids}}, {"_id": 0, "name": 1}).to_list(100)
     return [b["name"] for b in brands]
+
+
+
 
 
 @router.get("/brands/full")
@@ -152,6 +163,9 @@ async def create_product(payload: ProductWrite):
         "description": payload.description,
         "shortDescription": (payload.description or "")[:150],
         "searchText": search_text,
+        "rating": 0.0,
+        "totalReviews": 0,
+        "warranty": payload.warranty or "No Warranty",
         "embedding": embedding,
         "createdAt": datetime.now(),
         "status": "active"

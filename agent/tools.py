@@ -1,27 +1,5 @@
 # agent/tools.py
-from backend.api.search import search_products_core
 
-async def ai_omni_search_impl(q, category=None, gender=None, brand=None,min_price=None, max_price=None):
-    """
-    Called directly by the orchestrator's tool-execution loop — returns a plain
-    list, never raises HTTPException, so a no-results case is just an empty
-    list the LLM can react to conversationally.
-    """
-    return await search_products_core(
-        q=q, category=category, gender=gender, brand=brand,
-        min_price=min_price, max_price=max_price
-    )
-    
-
-    
-async def list_categories_impl():
-    from backend.db.database import db
-    categories = await db.Categories.find(
-        {"isActive": True, "parentCategoryId": {"$in": [None, "cat_fashion", "cat_electronics"]}},
-        {"_id": 0, "name": 1, "description": 1}
-    ).to_list(length=50)
-    return categories
-    
 ecommerce_tools = [
     {
         "type": "function",
@@ -77,7 +55,7 @@ ecommerce_tools = [
     "type": "function",
     "function": {
         "name": "list_brands",
-        "description": "Returns the actual brand names available in the store, optionally filtered by category. Use whenever the user asks 'which brands', 'what companies', or similar — NEVER answer this from memory.",
+        "description": "Category name or common phrasing, e.g. 'laptops', 'computers', 'sneakers', 'electronics'. Will be matched against the store's real category names.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -104,6 +82,55 @@ ecommerce_tools = [
             }
         }
     },
+    
+    ### Recommend Products
+    {
+    "type": "function",
+    "function": {
+        "name": "recommend_products",
+        "description": "Recommend products based on a described need (e.g. 'phone for gaming', 'laptop for university', 'best phone under $700'). Uses search plus rating/stock signals to rank recommendations, not just relevance.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "need": {"type": "string"},
+                "category": {"type": "string", "nullable": True},
+                "max_price": {"type": "number", "nullable": True},
+                "min_rating": {"type": "number", "nullable": True}
+            },
+            "required": ["need"]
+        }
+    }
+},
+{
+    "type": "function",
+    "function": {
+        "name": "compare_products",
+        "description": "Compare 2-3 specific products side-by-side on price, rating, reviews, warranty, and stock.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "product_ids": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["product_ids"]
+        }
+    }
+},
+{
+    "type": "function",
+    "function": {
+        "name": "get_similar_products",
+        "description": "Find products similar to a given product — same category, similar price range, and same brand when available.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "product_id": {"type": "string"}
+            },
+            "required": ["product_id"]
+        }
+    }
+},
+    
+    ### ORDER MANAGEMENT FUNCTIONS
     {
         "type": "function",
         "function": {
@@ -120,6 +147,18 @@ ecommerce_tools = [
                 "required": ["orderId"]
             }
         }
+    },
+    {
+    "type": "function",
+    "function": {
+        "name": "get_user_orders",
+        "description": "Retrieve the list of all orders placed by the currently logged-in user, with their status and totals. Use this when the user asks to see their orders, order history, or 'my orders' without referencing a specific Order ID.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
     },
 
     ### Support Ticket Management Functions
@@ -227,20 +266,24 @@ ecommerce_tools = [
     ### Store Policy Search Function
 
     {
-        "type": "function",
-        "function": {
-            "name": "search_store_policy",
-            "description": "Searches the store's knowledge base for FAQs, return policies, shipping rules, and general store operations. Use this whenever the user asks a question about HOW the store works rather than searching for specific products.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "q": {
-                        "type": "string",
-                        "description": "The specific question or topic to search for (e.g., 'return policy', 'shipping time', 'payment methods')"
-                    }
-                },
-                "required": ["q"]
-            }
+    "type": "function",
+    "function": {
+        "name": "search_store_policy",
+        "description": (
+            "Searches the store's knowledge base for FAQs, return policies, shipping rules, "
+            "contact information, support email/phone, business hours, and general store operations. "
+            "Use this whenever the user asks a question about HOW the store works, how to reach support, or wants contact details — rather than searching for specific products."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "q": {
+                    "type": "string",
+                    "description": "The specific question or topic to search for (e.g., 'return policy', 'shipping time', 'payment methods', 'contact email', 'support phone number')"
+                }
+            },
+            "required": ["q"]
         }
+    }
     },
 ]

@@ -3,7 +3,7 @@ import os
 import json
 import httpx
 import asyncio
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, http_client
 from dotenv import load_dotenv
 from agent.tools import ecommerce_tools
 
@@ -78,6 +78,9 @@ Be specific and helpful, never just "sorry, nothing found."
 - If the user asks a broad question about what’s available (not a specific product search), call `list_categories` first, then optionally suggest they narrow down.  
 - When presenting the results of `list_categories`, group and summarise naturally in prose – mention a few examples per broad area (electronics, fashion, home, beauty, kids) and invite the user to ask about a specific one.
 
+### POLICY TOOL RULE
+- If the user asks how to contact support, get an email/phone number, find contact information, or asks about return policies, shipping rules, payment methods, or general store operations, ALWAYS call `search_store_policy` first — do not tell them to "check the website" or guess without checking the knowledge base yourself.
+- Only fall back to a generic "I don't have that information" response if `search_store_policy` returns no relevant result.
 ---
 
 ### ABSOLUTE ACCURACY RULE
@@ -118,7 +121,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
     if ai_message.tool_calls:
         # Tools that require a logged-in user
         AUTH_REQUIRED_TOOLS = {
-            "check_order_status", "create_support_ticket", "check_ticket_status",
+            "check_order_status","get_user_orders", "create_support_ticket", "check_ticket_status",
             "add_ticket_comment", "close_support_ticket", "escalate_ticket",
         }
 
@@ -142,6 +145,17 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                         if function_name == "ai_omni_search":
                             # FIX: forward all search filters (brand, category, min/max price)
                             res = await http_client.get(f"{API_BASE_URL}/search/", params=arguments)
+                            api_response_data = res.json()
+                        elif function_name == "recommend_products":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/", params=arguments)
+                            api_response_data = res.json()
+
+                        elif function_name == "compare_products":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/compare",params={"product_ids": arguments["product_ids"]}   # httpx handles list params as repeated query keys
+                                                        )
+                            api_response_data = res.json()
+                        elif function_name == "get_similar_products":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/similar/{arguments['product_id']}")
                             api_response_data = res.json()
 
                         elif function_name == "get_product_by_id":
@@ -172,6 +186,10 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                                 params={"user_id": user_id}
                             )
                             api_response_data = res.json()
+                            
+                        elif function_name == "get_user_orders":
+                            res = await http_client.get(f"{API_BASE_URL}/orders/user/{user_id}")
+                            api_response_data = res.json()
 
                         elif function_name == "add_ticket_comment":
                             res = await http_client.post(
@@ -194,6 +212,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                                 json={"reason": arguments["reason"]}
                             )
                             api_response_data = res.json()
+                            
                         elif function_name == "list_categories":
                             res = await http_client.get(f"{API_BASE_URL}/categories/list")
                             api_response_data = res.json()
@@ -202,6 +221,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             # print(f"DEBUG list_brands raw response: {res.json()}")
                             api_response_data = res.json()
                             # print(f"DEBUG list_brands processed response: {api_response_data}")
+                        
                     
                     except Exception as e:
                         print(f"DEBUG list_brands EXCEPTION: {type(e).__name__}: {e}")

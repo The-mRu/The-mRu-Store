@@ -548,23 +548,28 @@ def place_order_api(request):
         user_id = request.session.get('user_id')
         if not user_id:
             return JsonResponse({"error": "Unauthorized"}, status=401)
-        
+
         try:
             data = json.loads(request.body)
-            
+
             payload = {
-                "user_id": user_id, 
-                "items": data.get("items", []),
-                "shipping": data.get("shipping", {}),
-                "total": data.get("total", 0.0)
-            }
-            
+    "user_id": user_id,
+    "items": data.get("items", []),
+    "address_id": data.get("address_id"),
+    "shipping_address": data.get("shipping_address"),
+    "payment_method": data.get("payment_method", "Credit Card"),
+    "subtotal": data.get("subtotal", 0.0),
+    "discount": data.get("discount", 0.0),
+    "shipping_fee": data.get("shipping_fee", 0.0),
+}
+
             response = requests.post(f"{FASTAPI_BASE_URL}/orders/place", json=payload)
             return JsonResponse(response.json(), status=response.status_code)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid method"}, status=405)
+
 
 def order_success_view(request):
     """Renders the professional order confirmation page."""
@@ -753,53 +758,23 @@ def dashboard_view(request):
 
     return render(request, 'store/dashboard.html', context)
 
+
 def order_history_view(request):
     user_id = request.session.get('user_id')
     if not user_id:
         return redirect('login')
 
-    # Fetch ALL orders for the history page
-    all_orders = list(db['Orders'].find({"userId": user_id}).sort("created_at", -1))
-    
+    all_orders = list(db['Orders'].find({"userId": user_id}).sort("orderedAt", -1))
+
     for order in all_orders:
-        # Force it to look for 'order_id' first. Only use '_id' as a last resort.
-        if 'order_id' in order and order['order_id']:
-            order['string_id'] = str(order['order_id'])
-        else:
-            order['string_id'] = str(order.get('_id', ''))
-            
+        order['string_id'] = order.get('id', str(order.get('_id', '')))
         order['item_count'] = sum(int(item.get("quantity", 1)) for item in order.get("items", []))
-        
+
     context = {
         'orders': all_orders,
-        # add any other context variables you need here
-    }
-    return render(request, 'store/order_history.html', context)
-
-
-def order_history_view(request): # (Make sure the name matches your actual view name)
-    user_id = request.session.get('user_id')
-    if not user_id:
-        return redirect('login')
-
-    # THE FIX: Fetch ALL orders for the history page
-    all_orders = list(db['Orders'].find({"userId": user_id}).sort("created_at", -1))
-    
-    for order in all_orders:
-        # order['string_id'] = str(order.get('_id', order.get('id', '')))
-        
-        # This tells Django to look for your custom 'order_id' first. 
-        # If it fails (e.g., for older test orders), it falls back to the MongoDB '_id'.
-        order['string_id'] = str(order.get('order_id' or order.get('_id', '')))
-        order['item_count'] = sum(int(item.get("quantity", 1)) for item in order.get("items", []))
-        
-    context = {
-        'orders': all_orders,
-        # add any other context variables you need here
         'user_name': request.session.get('user_name', 'User'),
     }
     return render(request, 'store/order_history.html', context)
-
 
 
 
@@ -807,39 +782,25 @@ def order_detail_view(request, order_id):
     user_id = request.session.get('user_id')
     if not user_id:
         return redirect('login')
-        
-    try:
-        # First try looking it up by the MongoDB _id (for old test orders)
-        order = db['Orders'].find_one({"_id": ObjectId(order_id), "userId": user_id})
-    except:
-        # THE FIX: If it's a UUID, it will fail the ObjectId check and fall back to here.
-        # We must look for 'order_id', not 'id'!
-        order = db['Orders'].find_one({"order_id": order_id, "userId": user_id})
-        
+
+    order = db['Orders'].find_one({"id": order_id, "userId": user_id})
+
     if not order:
         return redirect('order_history')
-        
-    # THE FIX: Apply the exact same bulletproof string_id logic here!
-    if 'order_id' in order and order['order_id']:
-        order['string_id'] = str(order['order_id'])
-    else:
-        order['string_id'] = str(order.get('_id', ''))
-        
+
+    order['string_id'] = order.get('id', '')
     order['item_count'] = sum(int(item.get("quantity", 1)) for item in order.get("items", []))
-    
-    # Hydrate product details
+
     for item in order.get("items", []):
         product_id = item.get("productId")
-        product_data = db['Products'].find_one({"id": product_id}) 
-        
+        product_data = db['Products'].find_one({"id": product_id})
+
         if product_data:
             item['name'] = product_data.get('name', 'Product Name Missing')
             item['price'] = product_data.get('price', 0)
             item['thumbnail'] = product_data.get('thumbnail', '')
-            
-    context = {
-        'order': order,
-    }
+
+    context = {'order': order}
     return render(request, 'store/order_detail.html', context)
 
 

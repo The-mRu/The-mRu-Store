@@ -55,15 +55,6 @@ def get_ticket_query(ticket_id: str, user_id: str) -> dict:
 
 
 # ---------- Routes ----------
-# @router.post("/")
-# async def create_support_ticket(ticket: SupportTicket):
-#     # 1. Added 'async' to the function definition
-#     # 2. Added 'await' to the insert_one operation
-#     result = await db.SupportTickets.insert_one(ticket.model_dump())
-#     if not result.inserted_id:
-#         raise HTTPException(status_code=500, detail="Failed to create support ticket")
-#     return {"message": "Support ticket created", "ticketId": str(result.inserted_id)}
-
 
 @router.post("/", status_code=201)
 async def create_support_ticket(ticket: TicketRequest):
@@ -142,6 +133,7 @@ async def get_ticket_status(
         "status": ticket.get("status", "open").upper(),
         "created_on": formatted_date,
         "assigned_to": ticket.get("assignedAdmin", "Pending Assignment"),
+        'comments': ticket.get("comments", []),
     }
 
 

@@ -69,28 +69,29 @@
             }, 2500);
         }
 
-        // Pull cart from DB when logged in
-        async function fetchCartFromDB() {
-            if (!currentUserId) return; // Stop if guest
-            
-            try {
-                const response = await fetch('/api/cart/sync/');
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.items) {
-                        // Overwrite local memory with database truth
-                        localCart = data.items;
-                        localStorage.setItem('mRuCart', JSON.stringify(localCart));
-                        updateCartBadge();
-                        
-                        // If they are on the cart page, redraw it
-                        if (typeof renderCart === 'function') renderCart(); 
-                    }
-                }
-            } catch (error) {
-                console.error("Failed to pull cart from DB", error);
+        // base.html, line ~73
+async function fetchCartFromDB() {
+    if (!currentUserId) return;
+    // Don't clobber a cart the user is actively building locally —
+    // only restore from DB when there's genuinely nothing local yet
+    // (e.g. fresh login on a new device/browser).
+    if (localCart.length > 0) return;
+
+    try {
+        const response = await fetch('/api/cart/sync/');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.items) {
+                localCart = data.items;
+                localStorage.setItem('mRuCart', JSON.stringify(localCart));
+                updateCartBadge();
+                if (typeof renderCart === 'function') renderCart(); 
             }
         }
+    } catch (error) {
+        console.error("Failed to pull cart from DB", error);
+    }
+}
 
         // Push cart to DB after modifying
         async function pushCartToDB() {
@@ -98,14 +99,16 @@
 
             try {
                 const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+                
                 await fetch('/api/cart/sync/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({ items: localCart })
-                });
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+    },
+    keepalive: true,   
+    body: JSON.stringify({ items: localCart })
+});
             } catch (error) {
                 console.error("Failed to push cart to DB", error);
             }

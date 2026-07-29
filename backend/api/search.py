@@ -6,9 +6,11 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from backend.db.database import db
 from sentence_transformers import SentenceTransformer
-from backend.api.ml_core import embedding_model
 
 router = APIRouter()
+
+print("Loading AI Search Model...")
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 def calculate_similarity(v1, v2):
@@ -47,13 +49,18 @@ def rerank_rrf(vector_results, text_results, k=60):
 
 
 async def resolve_category_id(category_name: str):
-    """Returns categoryId(s) to filter by — includes subcategories if the match is a parent category."""
-    doc = await db.Categories.find_one(
-        {"$or": [
-            {"name": {"$regex": f"^{re.escape(category_name)}$", "$options": "i"}},
-            {"slug": category_name}
-        ]}
-    )
+    """
+    Returns categoryId(s) to filter by. Matches slug, partial slug, or name —
+    and if the match is a parent category, expands to include its subcategories
+    (e.g. 'electronics' or 'laptop' both correctly pull in 'Computers & Laptops').
+    """
+    doc = await db.Categories.find_one({
+        "$or": [
+            {"slug": category_name},
+            {"slug": {"$regex": f"^{re.escape(category_name)}", "$options": "i"}},
+            {"name": {"$regex": re.escape(category_name), "$options": "i"}}
+        ]
+    })
     if not doc:
         return None
 
@@ -62,21 +69,15 @@ async def resolve_category_id(category_name: str):
         return {"$in": [doc["id"]] + child_ids}
     return doc["id"]
 
+
 async def resolve_brand_id(brand_name: str):
     doc = await db.Brands.find_one(
         {"name": {"$regex": f"^{re.escape(brand_name)}$", "$options": "i"}}
     )
     return doc["id"] if doc else None
 
-async def resolve_warranty_id(warranty_name: str):
-    doc = await db.Warranties.find_one(
-        {"name": {"$regex": f"^{re.escape(warranty_name)}$", "$options": "i"}}
-    )
-    return doc["id"] if doc else None
 
 async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
-    print(f"🔥🔥🔥 _run_search CALLED with brand={brand!r}, category={category!r}, q={q!r} 🔥🔥🔥") #testing perpose
-
     hard_filter = {"status": "active"}
 
     if gender:
@@ -92,10 +93,8 @@ async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
     if brand:
         brand_id = await resolve_brand_id(brand)
         if brand_id:
-            hard_filter["brandId"] = brand_id 
-            print(f"🔥🔥🔥 resolve_brand_id({brand!r}) returned: {brand_id!r}")
+            hard_filter["brandId"] = brand_id
         else:
-            print("🔥🔥🔥 RETURNING EMPTY — brand did not resolve")
             return []
 
     if min_price is not None or max_price is not None:
@@ -175,7 +174,7 @@ async def search_products_core(
     current = {"q": q, "category": category, "gender": gender, "brand": brand,
                "min_price": min_price, "max_price": max_price}
 
-    relax_order = ["gender", "price"]
+    relax_order = ["gender", "price"]   # brand and category are hard identity constraints — never auto-relaxed
     for field in relax_order:
         if field == "price":
             if current["min_price"] is None and current["max_price"] is None:

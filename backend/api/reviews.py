@@ -4,7 +4,7 @@ from backend.db.database import db
 from datetime import datetime
 from openai import AsyncOpenAI
 import os
-
+import re
 router = APIRouter()
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -23,34 +23,49 @@ async def get_all_reviews():
     return reviews
 
 
-@router.get("/summary/{product_id}")
-async def get_review_summary(product_id: str):
-    """AI-facing endpoint — returns rating summary + recent reviews, never 404s on empty."""
-    product = await db.Products.find_one(
-        {"id": product_id}, {"_id": 0, "name": 1, "rating": 1, "totalReviews": 1}
-    )
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+@router.get("/ai-summary-lookup")
+async def get_review_summary_flexible(product_id: str = None, product_name: str = None):
+    product = None
+    if product_id:
+        product = await db.Products.find_one({"id": product_id}, {"_id": 0, "id": 1, "name": 1})
 
+    if not product and product_name:
+        matches = await db.Products.find(
+            {"name": {"$regex": f"^{re.escape(product_name)}", "$options": "i"}, "status": "active"},
+            {"_id": 0, "id": 1, "name": 1, "brand": 1}
+        ).to_list(5)
+
+        if len(matches) == 1:
+            product = matches[0]
+        elif len(matches) > 1:
+            # Ambiguous — don't silently guess, tell the caller so it can ask the user
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Multiple products match this name — need more specificity.",
+                    "candidates": [{"id": m["id"], "name": m["name"], "brand": m.get("brand")} for m in matches]
+                }
+            )
+
+    if not product:
+        raise HTTPException(status_code=404, detail="Could not find this product by ID or name.")
+
+    real_id = product["id"]
     reviews = await db.Reviews.find(
-        {"productId": product_id}, {"_id": 0, "rating": 1, "comment": 1, "createdAt": 1}
+        {"productId": real_id}, {"_id": 0, "rating": 1, "comment": 1, "createdAt": 1}
     ).sort("createdAt", -1).limit(10).to_list(10)
 
     if not reviews:
-        return {
-            "product_name": product["name"],
-            "average_rating": 0.0,
-            "total_reviews": 0,
-            "recent_reviews": [],
-            "message": "This product has no reviews yet."
-        }
+        return {"product_name": product["name"], "average_rating": 0.0, "total_reviews": 0, "recent_reviews": [], "message": "No reviews yet."}
 
+    prod_full = await db.Products.find_one({"id": real_id}, {"rating": 1, "totalReviews": 1})
     return {
         "product_name": product["name"],
-        "average_rating": product.get("rating", 0.0),
-        "total_reviews": product.get("totalReviews", len(reviews)),
+        "average_rating": prod_full.get("rating", 0.0),
+        "total_reviews": prod_full.get("totalReviews", len(reviews)),
         "recent_reviews": [{"rating": r["rating"], "comment": r["comment"]} for r in reviews]
     }
+
 
 
 @router.get("/ai-summary/{product_id}")  ### review summary endpoint for product detail page 

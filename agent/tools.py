@@ -173,17 +173,16 @@ ecommerce_tools = [
     "type": "function",
     "function": {
         "name": "get_product_reviews",
-        "description": "Get customer reviews and rating breakdown for a specific product. Use when the user asks about reviews, ratings, or what other customers think of a product.",
+        "description": "Get customer reviews for a specific product. Provide product_id if you have it from a prior search. If you're not fully certain of the id, provide product_name instead — the system will look it up by name.",
         "parameters": {
             "type": "object",
             "properties": {
-                "product_id": {"type": "string"}
-            },
-            "required": ["product_id"]
+                "product_id": {"type": "string", "nullable": True},
+                "product_name": {"type": "string", "nullable": True}
+            }
         }
     }
-    },
-    
+},
     ### ORDER MANAGEMENT FUNCTIONS
     {
         "type": "function",

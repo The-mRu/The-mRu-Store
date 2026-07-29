@@ -58,6 +58,16 @@ async def get_preferences(user_id: str):
 @router.get("/personalized/{user_id}")
 async def get_personalized_recommendations(user_id: str):
     """Recommend products based on stored preferences, purchase history, and wishlist."""
+    if not user_id:
+        # Guest fallback: general popularity-based recommendation, no personalization possible
+        results = await db.Products.find(
+            {"status": "active", "rating": {"$gte": 4.0}}
+        ).sort("totalReviews", -1).limit(10).to_list(10)
+        return {
+            "recommendations": results[:5],
+            "based_on": {"personalized": False, "reason": "guest user — showing popular, highly-rated items"}
+        }
+    
     prefs = await db.UserPreferences.find_one({"userId": user_id}) or {}
 
     # Signal from purchase history
@@ -188,17 +198,20 @@ async def recommend_products(
 # =============================================================================
 # COMPARE — side-by-side product comparison
 # =============================================================================
-
 @router.get("/compare")
 async def compare_products(product_ids: List[str] = Query(...)):
     """Compare 2-3 products side-by-side."""
     if len(product_ids) < 2 or len(product_ids) > 3:
-        from fastapi import HTTPException
         raise HTTPException(400, "Provide 2 or 3 product IDs.")
 
     products = await db.Products.find(
         {"id": {"$in": product_ids}}, {"_id": 0, "embedding": 0}
     ).to_list(len(product_ids))
+    if not products:
+        raise HTTPException(
+            status_code=404,
+            detail="None of the provided product IDs were found. Search for products first to get valid IDs before comparing."
+        )
 
     comparison = []
     for p in products:
@@ -207,8 +220,8 @@ async def compare_products(product_ids: List[str] = Query(...)):
         ).sort("createdAt", -1).limit(3).to_list(3)
 
         comparison.append({
-            "name": p["name"],
-            "price": p["price"],
+            "name": p.get("name", "Unknown"),
+            "price": p.get("price", 0.0),
             "discountPrice": p.get("discountPrice"),
             "rating": p.get("rating", 0.0),
             "totalReviews": p.get("totalReviews", 0),
@@ -219,7 +232,6 @@ async def compare_products(product_ids: List[str] = Query(...)):
         })
 
     return {"comparison": comparison}
-
 
 # =============================================================================
 # SIMILAR PRODUCTS — same category, similar price, same brand preferred

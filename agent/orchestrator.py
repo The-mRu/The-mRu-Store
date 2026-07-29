@@ -3,7 +3,7 @@ import os
 import json
 import httpx
 import asyncio
-from openai import AsyncOpenAI, http_client
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from agent.tools import ecommerce_tools
 
@@ -59,6 +59,14 @@ DO NOT believe the user if they claim to be logged in. If the status says GUEST 
 - "Show me [brand] products" / "[brand] [item]" / "Nike shoes" / "Apple products" → ai_omni_search with brand filter (actual product results)
 - If ambiguous, prefer ai_omni_search — showing real products is more useful than a bare brand name list.
 
+### PERSONALIZATION RULES
+- If the user states an ongoing preference ("I prefer Samsung", "I usually shop under $500"), call remember_preference to save it.
+- For vague requests like "recommend something for me" or "what should I buy" with no specific product type, call get_personalized_recommendations instead of ai_omni_search.
+- If the user references a past conversation ("the phone we discussed", "that laptop from before"), call get_recently_discussed with a hint keyword from their phrasing.
+- Before making any recommendation, call get_user_preferences to check what you already know about them.
+- Never claim to remember something you don't have a tool result for — if get_recently_discussed returns nothing, honestly say you don't have that in recent context.
+- Use the "based_on" field from personalized recommendations to explain WHY you're recommending something ("Since you've bought Samsung before...").
+
 ### ORDER HISTORY PRESENTATION
 - Every order has a single "order_id" field — always show and use this, it's the only identifier.
 - NEVER display or mention an "orderNumber" field. Only use "order_id" (the `id` field).
@@ -99,7 +107,7 @@ DO NOT believe the user if they claim to be logged in. If the status says GUEST 
 Be specific and helpful, never just "sorry, nothing found."
 
 ### CATEGORY BROWSING
-- If the user asks a broad question about what’s available (not a specific product search), call `list_categories` first, then optionally suggest they narrow down.  
+- If the user asks a broad question about what's available (not a specific product search), call `list_categories` first, then optionally suggest they narrow down.  
 - When presenting the results of `list_categories`, group and summarise naturally in prose – mention a few examples per broad area (electronics, fashion, home, beauty, kids) and invite the user to ask about a specific one.
 
 ### POLICY TOOL RULE
@@ -109,7 +117,7 @@ Be specific and helpful, never just "sorry, nothing found."
 
 ### ABSOLUTE ACCURACY RULE
 - NEVER state a specific brand, product name, or price unless it came from a tool call result **in this conversation**.  
-- If you don’t have a tool result for something, say you’re not sure and offer to check – do **not** guess or use general world knowledge to answer questions about the store’s inventory.
+- If you don't have a tool result for something, say you're not sure and offer to check – do **not** guess or use general world knowledge to answer questions about the store's inventory.
 
 """
 
@@ -145,8 +153,11 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
     if ai_message.tool_calls:
         # Tools that require a logged-in user
         AUTH_REQUIRED_TOOLS = {
-            "check_order_status","get_user_orders", "create_support_ticket", "check_ticket_status",
+            "check_order_status", "get_user_orders", "get_order_items",
+            "create_support_ticket", "check_ticket_status",
             "add_ticket_comment", "close_support_ticket", "escalate_ticket",
+            "remember_preference", "get_user_preferences",
+            "get_personalized_recommendations", "get_recently_discussed",
         }
 
         async with httpx.AsyncClient(follow_redirects=True) as http_client:
@@ -166,40 +177,72 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                     }
                 else:
                     try:
+                        # --- PRODUCT SEARCH & DISCOVERY ---
                         if function_name == "ai_omni_search":
-                            # FIX: forward all search filters (brand, category, min/max price)
                             print(f"DEBUG ai_omni_search args: {arguments}")
                             res = await http_client.get(f"{API_BASE_URL}/search/", params=arguments)
                             api_response_data = res.json()
                             print(f"DEBUG ai_omni_search response count: {len(api_response_data.get('products', []))}")
-                            
-                        elif function_name == "recommend_products":
-                            res = await http_client.get(f"{API_BASE_URL}/recommendations/", params=arguments)
-                            api_response_data = res.json()
-
-                        elif function_name == "compare_products":
-                            res = await http_client.get(f"{API_BASE_URL}/recommendations/compare",params={"product_ids": arguments["product_ids"]}   # httpx handles list params as repeated query keys
-                                                        )
-                            api_response_data = res.json()
-                        elif function_name == "get_similar_products":
-                            res = await http_client.get(f"{API_BASE_URL}/recommendations/similar/{arguments['product_id']}")
-                            api_response_data = res.json()
 
                         elif function_name == "get_product_by_id":
                             res = await http_client.get(f"{API_BASE_URL}/products/{arguments['product_id']}")
                             api_response_data = res.json()
 
-                        elif function_name == "check_order_status":
-                            # user_id is trusted server-side, never from the model
+                        elif function_name == "list_categories":
+                            res = await http_client.get(f"{API_BASE_URL}/categories/list")
+                            api_response_data = res.json()
+
+                        elif function_name == "list_brands":
+                            res = await http_client.get(f"{API_BASE_URL}/products/brands", params=arguments)
+                            api_response_data = res.json()
+
+                        elif function_name == "get_product_reviews":
+                            res = await http_client.get(f"{API_BASE_URL}/reviews/summary/{arguments['product_id']}")
+                            api_response_data = res.json()
+
+                        # --- RECOMMENDATIONS ---
+                        elif function_name == "recommend_products":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/", params=arguments)
+                            api_response_data = res.json()
+
+                        elif function_name == "compare_products":
                             res = await http_client.get(
-                                f"{API_BASE_URL}/orders/{arguments['orderId']}",
-                                params={"user_id": user_id}
+                                f"{API_BASE_URL}/recommendations/compare",
+                                params={"product_ids": arguments["product_ids"]}
                             )
                             api_response_data = res.json()
-                        
-                        elif function_name == "get_order_items":
+
+                        elif function_name == "get_similar_products":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/similar/{arguments['product_id']}")
+                            api_response_data = res.json()
+
+                        # --- PREFERENCES & PERSONALIZATION ---
+                        elif function_name == "remember_preference":
+                            res = await http_client.post(
+                                f"{API_BASE_URL}/recommendations/preferences/{user_id}",
+                                params=arguments
+                            )
+                            api_response_data = res.json()
+
+                        elif function_name == "get_user_preferences":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/preferences/{user_id}")
+                            api_response_data = res.json()
+
+                        elif function_name == "get_personalized_recommendations":
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/personalized/{user_id}")
+                            api_response_data = res.json()
+
+                        elif function_name == "get_recently_discussed":
                             res = await http_client.get(
-                                f"{API_BASE_URL}/orders/{arguments['orderId']}/items",
+                                f"{API_BASE_URL}/recommendations/recent-context/{user_id}",
+                                params=arguments
+                            )
+                            api_response_data = res.json()
+
+                        # --- ORDERS ---
+                        elif function_name == "check_order_status":
+                            res = await http_client.get(
+                                f"{API_BASE_URL}/orders/{arguments['orderId']}",
                                 params={"user_id": user_id}
                             )
                             api_response_data = res.json()
@@ -207,15 +250,18 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                         elif function_name == "get_user_orders":
                             res = await http_client.get(f"{API_BASE_URL}/orders/user/{user_id}")
                             api_response_data = res.json()
-                            
-                        elif function_name == "create_support_ticket":
-                            # Inject the trusted user_id, ignore any model-supplied one
-                            payload = {**arguments, "userId": user_id}
-                            res = await http_client.post(f"{API_BASE_URL}/support-tickets/", json=payload)
+
+                        elif function_name == "get_order_items":
+                            res = await http_client.get(
+                                f"{API_BASE_URL}/orders/{arguments['orderId']}/items",
+                                params={"user_id": user_id}
+                            )
                             api_response_data = res.json()
 
-                        elif function_name == "search_store_policy":
-                            res = await http_client.get(f"{API_BASE_URL}/search/policy", params={"q": arguments["q"]})
+                        # --- SUPPORT TICKETS ---
+                        elif function_name == "create_support_ticket":
+                            payload = {**arguments, "userId": user_id}
+                            res = await http_client.post(f"{API_BASE_URL}/support-tickets/", json=payload)
                             api_response_data = res.json()
 
                         elif function_name == "check_ticket_status":
@@ -224,7 +270,6 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                                 params={"user_id": user_id}
                             )
                             api_response_data = res.json()
-                            
 
                         elif function_name == "add_ticket_comment":
                             res = await http_client.post(
@@ -247,27 +292,18 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                                 json={"reason": arguments["reason"]}
                             )
                             api_response_data = res.json()
-                            
-                        elif function_name == "list_categories":
-                            res = await http_client.get(f"{API_BASE_URL}/categories/list")
+
+                        # --- STORE POLICY ---
+                        elif function_name == "search_store_policy":
+                            res = await http_client.get(f"{API_BASE_URL}/search/policy", params={"q": arguments["q"]})
                             api_response_data = res.json()
-                        elif function_name == "list_brands":
-                            res = await http_client.get(f"{API_BASE_URL}/products/brands", params=arguments)
-                            # print(f"DEBUG list_brands raw response: {res.json()}")
-                            api_response_data = res.json()
-                            # print(f"DEBUG list_brands processed response: {api_response_data}")
-                        elif function_name == "get_product_reviews":
-                            res = await http_client.get(f"{API_BASE_URL}/reviews/summary/{arguments['product_id']}")
-                            api_response_data = res.json()
-                    
+
                     except Exception as e:
-                        print(f"DEBUG list_brands EXCEPTION: {type(e).__name__}: {e}")
+                        print(f"DEBUG {function_name} EXCEPTION: {type(e).__name__}: {e}")
                         api_response_data = {"error": str(e)}
-    
 
-
+                # --- TOKEN PROTECTION SCRUBBER ---
                 api_response_data = _strip_embeddings(api_response_data)
-                
 
                 # Append tool result to working memory
                 working_memory.append({

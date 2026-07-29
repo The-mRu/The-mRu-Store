@@ -100,7 +100,7 @@ ecommerce_tools = [
             "required": ["need"]
         }
     }
-},
+},  
 {
     "type": "function",
     "function": {
@@ -129,6 +129,44 @@ ecommerce_tools = [
         }
     }
     },
+
+    ### User Preference Functions
+    {
+    "type": "function",
+    "function": {
+        "name": "remember_preference",
+        "description": "Store a stated user preference (brand, category, or budget) for future personalization. Call this whenever the user explicitly states a preference, e.g. 'I prefer Samsung', 'I usually shop under $500', 'I like gaming laptops'. Do NOT call this for a one-off product search — only for statements about ongoing preference.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "brand": {"type": "string", "nullable": True},
+                "category": {"type": "string", "nullable": True},
+                "budget_max": {"type": "number", "nullable": True}
+            }
+        }
+    }
+},
+    {
+    "type": "function",
+    "function": {
+        "name": "get_personalized_recommendations",
+        "description": "Recommend products tailored to this specific user — factoring in their stated preferences, past order brands/categories, and wishlist. Use for vague asks like 'recommend something for me' with no specific product type mentioned.",
+        "parameters": {"type": "object", "properties": {}}
+    }
+},
+    {
+    "type": "function",
+    "function": {
+        "name": "get_recently_discussed",
+        "description": "Find products that were previously shown to this user in past chat conversations. Use when the user references a past discussion: 'the phone we discussed', 'that laptop from yesterday', 'show me those shoes again'.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hint": {"type": "string", "nullable": True, "description": "Optional keyword from the user's phrasing to filter, e.g. 'phone', 'laptop'"}
+            }
+        }
+    }
+},
 
     ### Customer Reviews Functions
     {

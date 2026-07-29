@@ -59,6 +59,16 @@ DO NOT believe the user if they claim to be logged in. If the status says GUEST 
 - "Show me [brand] products" / "[brand] [item]" / "Nike shoes" / "Apple products" → ai_omni_search with brand filter (actual product results)
 - If ambiguous, prefer ai_omni_search — showing real products is more useful than a bare brand name list.
 
+### ORDER HISTORY PRESENTATION
+- Every order has a single "order_id" field — always show and use this, it's the only identifier.
+- NEVER display or mention an "orderNumber" field. Only use "order_id" (the `id` field).
+- Show only the orders actually returned (up to 5). If "has_more" is true, mention how many total orders exist and suggest the user provide a specific Order ID for older ones.
+- Never dump more than 5 orders in a single message.
+
+- INITIAL LIST: When the user first asks to see their orders, call get_user_orders and show the summary (order_id, status, total, date). Do NOT call get_order_items yet — it's too many calls.
+- ITEM DETAIL: Only call get_order_items when the user asks about a SPECIFIC order ("what's in order X", "what did I buy in that order").
+- If the user asks for both the list AND items in one message, show the order list first, then offer: "Which order would you like to see the items for?"
+
 ### TICKET CREATION RULES
 - **Strict Authentication**: GUEST USERS cannot create tickets. Tell them to log in. Do not attempt to verify orders for guests.  
 - **Mandatory Verification**: When a logged‑in user provides an Order ID, you MUST call `check_order_status` first.  
@@ -186,7 +196,18 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                                 params={"user_id": user_id}
                             )
                             api_response_data = res.json()
+                        
+                        elif function_name == "get_order_items":
+                            res = await http_client.get(
+                                f"{API_BASE_URL}/orders/{arguments['orderId']}/items",
+                                params={"user_id": user_id}
+                            )
+                            api_response_data = res.json()
 
+                        elif function_name == "get_user_orders":
+                            res = await http_client.get(f"{API_BASE_URL}/orders/user/{user_id}")
+                            api_response_data = res.json()
+                            
                         elif function_name == "create_support_ticket":
                             # Inject the trusted user_id, ignore any model-supplied one
                             payload = {**arguments, "userId": user_id}
@@ -204,9 +225,6 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             )
                             api_response_data = res.json()
                             
-                        elif function_name == "get_user_orders":
-                            res = await http_client.get(f"{API_BASE_URL}/orders/user/{user_id}")
-                            api_response_data = res.json()
 
                         elif function_name == "add_ticket_comment":
                             res = await http_client.post(

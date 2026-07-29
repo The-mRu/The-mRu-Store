@@ -168,14 +168,27 @@ ecommerce_tools = [
     "type": "function",
     "function": {
         "name": "get_user_orders",
-        "description": "Retrieve the list of all orders placed by the currently logged-in user, with their status and totals. Use this when the user asks to see their orders, order history, or 'my orders' without referencing a specific Order ID.",
+        "description": "Get the user's most recent orders (up to 5 by default). Use for 'show me my orders' or 'check my orders'. If the user wants details on a SPECIFIC order beyond what's shown, or wants to see older orders, ask them for the Order ID rather than trying to list everything.",
         "parameters": {
             "type": "object",
-            "properties": {},
-            "required": []
+            "properties": {}
         }
     }
-    },
+},
+    {
+    "type": "function",
+    "function": {
+        "name": "get_order_items",
+        "description": "Get the specific products, quantities, and prices paid for a given order. Use when the user asks 'what did I order', 'what's in this order', or wants item-level detail beyond just order status.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "orderId": {"type": "string", "description": "The order number or ID the user provided."}
+            },
+            "required": ["orderId"]
+        }
+    }
+},
 
     ### Support Ticket Management Functions
 

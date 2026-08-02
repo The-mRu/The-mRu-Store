@@ -74,7 +74,6 @@ def parse_date(date_str: str) -> datetime:
     
     raise ValueError(f"Could not parse date: '{date_str}'. Use YYYY-MM-DD, DD/MM/YYYY, or 'today'.")
 
-
 @router.get("/summary")
 async def get_business_summary(
     period: str = Query("today", description="today | yesterday | week"),
@@ -112,9 +111,12 @@ async def get_business_summary(
     revenue = revenue_result[0]["total"] if revenue_result else 0
 
     new_customers = await db.Users.count_documents({"createdAt": {"$gte": start, "$lt": end}})
-    low_stock = await db.Products.count_documents({"stock": {"$lte": 10}, "status": "active"})
 
-    return {
+    # Only include current low stock for "today" — not meaningful for historical/future dates
+    is_today = (start.date() == now.date())
+    low_stock = await db.Products.count_documents({"stock": {"$lte": 10}, "status": "active"}) if is_today else None
+
+    result = {
         "period_start": start.strftime("%Y-%m-%d"),
         "period_end": end.strftime("%Y-%m-%d"),
         "total_orders": total_orders,
@@ -122,8 +124,15 @@ async def get_business_summary(
         "new_customers": new_customers,
         "pending_orders": pending,
         "cancelled_orders": cancelled,
-        "low_stock_alerts": low_stock
     }
+
+    if is_today:
+        result["low_stock_alerts"] = low_stock
+    else:
+        result["low_stock_alerts"] = None
+        result["low_stock_note"] = "Low stock data is only available for today's date."
+
+    return result
 
 @router.get("/analytics")
 async def get_sales_analytics(compare: str = None):

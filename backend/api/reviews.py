@@ -1,12 +1,34 @@
 # backend/api/reviews.py
-from fastapi import APIRouter, HTTPException
-from backend.db.database import db
-from datetime import datetime
-from openai import AsyncOpenAI
 import os
 import re
+
+from datetime import datetime
+
+from dotenv import load_dotenv
+from fastapi import APIRouter, HTTPException
+from openai import AsyncOpenAI
+
+from backend.db.database import db
+
+load_dotenv()
+
 router = APIRouter()
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_openai_client = None
+
+
+def get_openai_client():
+    global _openai_client
+
+    if _openai_client is None:
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="OPENAI_API_KEY is missing. Add it to your environment or .env file."
+            )
+        _openai_client = AsyncOpenAI(api_key=api_key)
+
+    return _openai_client
 
 
 @router.get("/product/{product_id}")
@@ -68,6 +90,45 @@ async def get_review_summary_flexible(product_id: str = None, product_name: str 
 
 
 
+@router.get("/summary/{product_id}")
+async def get_review_summary(product_id: str):
+    """
+    AI-facing endpoint — returns rating summary + recent reviews.
+    Never 404s on zero reviews (a real product can genuinely have none) —
+    only 404s if the product itself doesn't exist.
+    Strict id-based lookup: with the orchestrator's product_id registry now
+    resolving/validating ids before this is ever called, this endpoint no
+    longer needs fuzzy name-matching as a fallback.
+    """
+    product = await db.Products.find_one(
+        {"id": product_id}, {"_id": 0, "name": 1, "rating": 1, "totalReviews": 1}
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    reviews = await db.Reviews.find(
+        {"productId": product_id}, {"_id": 0, "rating": 1, "comment": 1, "createdAt": 1}
+    ).sort("createdAt", -1).limit(10).to_list(10)
+
+    if not reviews:
+        return {
+            "product_name": product["name"],
+            "average_rating": 0.0,
+            "total_reviews": 0,
+            "recent_reviews": [],
+            "message": "This product has no reviews yet."
+        }
+
+    return {
+        "product_name": product["name"],
+        "average_rating": product.get("rating", 0.0),
+        "total_reviews": product.get("totalReviews", len(reviews)),
+        "recent_reviews": [{"rating": r["rating"], "comment": r["comment"]} for r in reviews]
+    }
+
+
+
+
 @router.get("/ai-summary/{product_id}")  ### review summary endpoint for product detail page 
 async def get_ai_review_summary(product_id: str):
     """
@@ -93,6 +154,7 @@ async def get_ai_review_summary(product_id: str):
         f"{review_text}"
     )
 
+    client = get_openai_client()
     response = await client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]

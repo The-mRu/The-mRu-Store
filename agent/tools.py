@@ -169,17 +169,20 @@ ecommerce_tools = [
 },
 
     ### Customer Reviews Functions
-    {
+{
     "type": "function",
     "function": {
         "name": "get_product_reviews",
-        "description": "Get customer reviews for a specific product. Provide product_id if you have it from a prior search. If you're not fully certain of the id, provide product_name instead — the system will look it up by name.",
+        "description": "Get customer reviews for a specific product using its product_id. You MUST use the exact product_id from a prior ai_omni_search result — never pass a product_name.",
         "parameters": {
             "type": "object",
             "properties": {
-                "product_id": {"type": "string", "nullable": True},
-                "product_name": {"type": "string", "nullable": True}
-            }
+                "product_id": {
+                    "type": "string",
+                    "description": "The exact product_id from a previous search result (e.g., 'prod_auto_221')"
+                }
+            },
+            "required": ["product_id"]
         }
     }
 },

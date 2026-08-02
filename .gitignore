@@ -12,3 +12,6 @@ venv/
 .pytest_cache/
 .vscode/
 
+# Ignore accidental root-level artifact created from a mistyped git command
+/et --hard HEAD
+

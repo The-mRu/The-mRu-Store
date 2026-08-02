@@ -40,4 +40,7 @@ urlpatterns = [
     path('admin-dashboard/orders/<str:order_id>/', views.admin_order_details_view, name='admin_order_details'),
     path('admin-dashboard/ai-assistant/', views.admin_ai_assistant_view, name='admin_ai_assistant'),
     
+    path('admin-dashboard/ai-assistant/', views.admin_chat_interface_view, name='admin_chat_interface'),
+    path('api/admin-chat/', views.api_admin_chat_proxy, name='api_admin_chat_proxy'),
+    
 ]

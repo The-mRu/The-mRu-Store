@@ -2,7 +2,7 @@
 
 {% block admin_content %}
 <div class="max-w-5xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
-    
+
     <!-- Header -->
     <div class="mb-6">
         <h1 class="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
@@ -13,23 +13,23 @@
 
     <!-- Main Chat/Workspace Area -->
     <div class="flex-1 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col overflow-hidden">
-        
+
         <!-- Quick Actions (Top Bar) -->
         <div class="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex gap-3 overflow-x-auto">
-            <button class="whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm">
-                📝 Draft Product Description
+            <button type="button" class="quick-action whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm" data-prompt="How is my business today?">
+                📊 Business Summary
             </button>
-            <button class="whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm">
-                📊 Analyze Weekly Sales
+            <button type="button" class="quick-action whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm" data-prompt="Show me sales trends this week">
+                📈 Sales This Week
             </button>
-            <button class="whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm">
-                💡 Suggest Promotions
+            <button type="button" class="quick-action whitespace-nowrap px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition shadow-sm" data-prompt="What are my top selling products?">
+                🏆 Top Selling Products
             </button>
         </div>
 
         <!-- Chat History -->
         <div class="flex-1 p-6 overflow-y-auto space-y-6 bg-gray-50 dark:bg-gray-900/20" id="chat-container">
-            
+
             <!-- AI Welcome Message -->
             <div class="flex gap-4">
                 <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
@@ -46,16 +46,17 @@
 
         <!-- Input Area -->
         <div class="p-4 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
-            <!-- <form onsubmit="event.preventDefault();" class="relative"> -->
-                <form id="ai-form" class="relative">
-                <input 
-                    type="text" 
+            <form id="ai-form" class="relative">
+                {% csrf_token %}
+                <input
+                    type="text"
                     id="ai-prompt"
-                    placeholder="Ask the AI something..." 
+                    placeholder="Ask the AI something..."
                     class="w-full pl-4 pr-14 py-4 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                 >
-                <button 
-                    type="submit" 
+                <button
+                    type="submit"
+                    id="ai-submit-btn"
                     class="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center transition shadow-md"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 rotate-90" viewBox="0 0 20 20" fill="currentColor">
@@ -70,57 +71,190 @@
 
     </div>
 </div>
+
+<!-- Markdown rendering library -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 <!-- Interactive Chat Script -->
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         const form = document.getElementById('ai-form');
         const input = document.getElementById('ai-prompt');
         const chatContainer = document.getElementById('chat-container');
+        const submitBtn = document.getElementById('ai-submit-btn');
+        const adminInitial = "{{ request.session.admin_name|default:'U'|first|upper }}";
 
-        form.addEventListener('submit', function(e) {
-            e.preventDefault(); // Stop page from refreshing
-            
-            const message = input.value.trim();
-            if (!message) return; // Don't send empty messages
-
-             
-            // 1. Add User Message to Chat
+        function addUserBubble(message) {
             const userBubble = `
                 <div class="flex gap-4 justify-end items-start w-full">
                     <div class="bg-indigo-600 text-white px-4 py-2.5 rounded-2xl rounded-tr-none shadow-sm max-w-[80%] h-fit w-fit break-words">
-                        <p class="text-sm leading-relaxed">${message}</p>
+                        <p class="text-sm leading-relaxed">${escapeHtml(message)}</p>
                     </div>
                     <div class="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 border border-gray-300 dark:border-gray-600">
-                        <span class="text-gray-600 dark:text-gray-300 text-sm font-bold">{{ request.session.admin_name|make_list|first|upper|default:"U" }}</span>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-bold">${adminInitial}</span>
                     </div>
                 </div>
             `;
             chatContainer.insertAdjacentHTML('beforeend', userBubble);
+        }
+
+        function addAiBubble(text) {
+            // Convert Markdown to HTML for structured responses
+            const formattedText = marked.parse(text);
             
-            // Clear input and scroll down
+            const aiBubble = `
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
+                        <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm max-w-[80%] ai-message-content">
+                        ${formattedText}
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', aiBubble);
+        }
+
+        function addThinkingBubble() {
+            const thinkingBubble = `
+                <div class="flex gap-4" id="thinking-bubble">
+                    <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
+                        <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <p class="text-sm text-gray-400 dark:text-gray-500 italic">Thinking...</p>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', thinkingBubble);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getCsrfToken() {
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        }
+
+        async function sendMessage(message) {
+            if (!message) return;
+
+            addUserBubble(message);
             input.value = '';
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            addThinkingBubble();
+            submitBtn.disabled = true;
 
-            // 2. Simulate AI "Thinking" and Responding
-            // (Later, you will replace this setTimeout with a real fetch() call to your FastAPI backend)
-            setTimeout(() => {
-                const aiBubble = `
-                    <div class="flex gap-4">
-                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
-                            <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
-                        </div>
-                        <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm max-w-[80%]">
-                            <p class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">
-                                I received your message: <em>"${message}"</em> <br><br>
-                                I am currently running in UI-Only mode. You will need to wire me up to your backend API to give me real brainpower!
-                            </p>
-                        </div>
-                    </div>
-                `;
-                chatContainer.insertAdjacentHTML('beforeend', aiBubble);
+            try {
+                const response = await fetch("{% url 'api_admin_chat_proxy' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                document.getElementById('thinking-bubble')?.remove();
+
+                if (!response.ok) {
+                    addAiBubble(`⚠️ ${data.error || 'Something went wrong. Please try again.'}`);
+                } else {
+                    addAiBubble(data.reply || "I didn't get a response — please try again.");
+                }
+            } catch (err) {
+                document.getElementById('thinking-bubble')?.remove();
+                addAiBubble("⚠️ Couldn't reach the AI assistant. Please check your connection and try again.");
+            } finally {
+                submitBtn.disabled = false;
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-            }, 1000); // 1 second delay to simulate thinking
+            }
+        }
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            sendMessage(input.value.trim());
+        });
+
+        document.querySelectorAll('.quick-action').forEach(btn => {
+            btn.addEventListener('click', function() {
+                sendMessage(this.dataset.prompt);
+            });
         });
     });
 </script>
+
+<!-- Styles for Markdown-rendered content inside AI messages -->
+<style>
+    .ai-message-content h1, .ai-message-content h2, .ai-message-content h3 {
+        font-weight: 700;
+        margin-top: 0.75rem;
+        margin-bottom: 0.5rem;
+        line-height: 1.3;
+    }
+    .ai-message-content h1 { font-size: 1.25rem; }
+    .ai-message-content h2 { font-size: 1.1rem; }
+    .ai-message-content h3 { font-size: 1rem; }
+    .ai-message-content p {
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.6;
+    }
+    .ai-message-content ul, .ai-message-content ol {
+        margin-bottom: 0.5rem;
+        padding-left: 1.25rem;
+        font-size: 0.875rem;
+    }
+    .ai-message-content li {
+        margin-bottom: 0.25rem;
+        line-height: 1.5;
+    }
+    .ai-message-content strong {
+        font-weight: 700;
+        color: inherit;
+    }
+    .ai-message-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.75rem 0;
+        font-size: 0.8rem;
+    }
+    .ai-message-content th, .ai-message-content td {
+        border: 1px solid #d1d5db;
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+    }
+    .ai-message-content th {
+        background: #f3f4f6;
+        font-weight: 700;
+    }
+    .dark .ai-message-content th {
+        background: #374151;
+    }
+    .dark .ai-message-content th, .dark .ai-message-content td {
+        border-color: #4b5563;
+    }
+    .ai-message-content code {
+        background: #f3f4f6;
+        padding: 0.15rem 0.35rem;
+        border-radius: 0.25rem;
+        font-size: 0.8rem;
+        font-family: monospace;
+    }
+    .dark .ai-message-content code {
+        background: #374151;
+    }
+    .ai-message-content hr {
+        margin: 0.75rem 0;
+        border-color: #e5e7eb;
+    }
+    .dark .ai-message-content hr {
+        border-color: #4b5563;
+    }
+</style>
 {% endblock %}

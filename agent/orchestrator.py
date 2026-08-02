@@ -6,6 +6,7 @@ import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from agent.tools import ecommerce_tools
+from agent.admin_tools import admin_tools, get_admin_system_prompt
 
 load_dotenv()
 
@@ -173,11 +174,16 @@ DO NOT believe the user if they claim to be logged in. If the status says GUEST 
 - For contact info, return policies, shipping, payment methods: ALWAYS call search_store_policy first.
 - Only fall back to "I don't have that information" if search_store_policy returns no relevant result.
 """
-
 # =============================================================================
 # MAIN AGENT RUNNER
 # =============================================================================
-async def run_agent(user_message: str, message_history: list, user_id: str = None):
+# MODIFIED: Added is_admin parameter to switch between customer and admin modes
+async def run_agent(user_message: str, message_history: list, user_id: str = None, is_admin: bool = False):
+    
+    # MODIFIED: Select tools and prompt based on admin vs customer mode
+    tools_to_use = admin_tools if is_admin else ecommerce_tools
+    system_prompt_text = get_admin_system_prompt() if is_admin else get_dynamic_system_prompt(user_id)
+    
     # 1. Add user message to the active session history
     message_history.append({"role": "user", "content": user_message})
 
@@ -194,8 +200,8 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
             except (json.JSONDecodeError, TypeError):
                 continue
 
-    # Inject dynamic system prompt based on authenticated user
-    system_prompt = {"role": "system", "content": get_dynamic_system_prompt(user_id)}
+    # MODIFIED: Uses the selected system prompt (admin or customer)
+    system_prompt = {"role": "system", "content": system_prompt_text}
     if working_memory[0].get("role") == "system":
         working_memory[0] = system_prompt
     else:
@@ -203,16 +209,14 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
 
     MAX_TOOL_ROUNDS = 4
 
-    # 2/3. Tool-calling loop — lets the model react to a tool result
-    # (including a "product_id not recognized" error) and issue a
-    # follow-up tool call, instead of only getting one fixed round.
     for round_num in range(MAX_TOOL_ROUNDS):
         print(f"\n🤖 Agent is analyzing intent... (User ID: {user_id}, round {round_num + 1})")
 
+        # MODIFIED: Uses the selected tool set (admin or customer)
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=working_memory,
-            tools=ecommerce_tools,
+            tools=tools_to_use,  
             tool_choice="auto"
         )
 
@@ -220,11 +224,9 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
         working_memory.append(ai_message)
 
         if not ai_message.tool_calls:
-            # Model gave a direct answer, no tools needed this round — done
             message_history.append({"role": "assistant", "content": ai_message.content})
             return ai_message.content
 
-        # Tools that require a logged-in user
         AUTH_REQUIRED_TOOLS = {
             "check_order_status", "get_user_orders", "get_order_items",
             "create_support_ticket", "check_ticket_status",
@@ -242,9 +244,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
 
                 api_response_data = None
 
-                # =========================================================================
-                # PRODUCT ID VALIDATION — intercept before any ID-dependent tool
-                # =========================================================================
+                # --- PRODUCT ID VALIDATION ---
                 if function_name in PRODUCT_ID_TOOLS:
                     if function_name == "compare_products" and "product_ids" in arguments:
                         resolved_ids = []
@@ -273,7 +273,6 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                                 "error": "product_id not recognized",
                                 "message": f"No product matching '{attempted}' found in this conversation. Call ai_omni_search first to get real IDs."
                             }
-                # =========================================================================
 
                 # --- HARD AUTH GATE ---
                 if api_response_data is None and function_name in AUTH_REQUIRED_TOOLS and not user_id:
@@ -391,6 +390,22 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             res = await http_client.get(f"{API_BASE_URL}/search/policy", params={"q": arguments["q"]})
                             api_response_data = res.json()
 
+                        # =========================================================================
+                        # ADDED: Admin dashboard tool dispatch
+                        # =========================================================================
+                        elif function_name == "get_business_summary":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/summary", params=arguments)
+                            api_response_data = res.json()
+
+                        elif function_name == "get_sales_analytics":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/analytics", params=arguments)
+                            api_response_data = res.json()
+
+                        elif function_name == "get_top_selling_products":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/top-products", params=arguments)
+                            api_response_data = res.json()
+                        # =========================================================================
+
                     except Exception as e:
                         print(f"DEBUG {function_name} EXCEPTION: {type(e).__name__}: {e}")
                         api_response_data = {"error": str(e)}
@@ -398,7 +413,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                 # --- TOKEN PROTECTION SCRUBBER ---
                 api_response_data = _strip_embeddings(api_response_data)
 
-                # --- UPDATE PRODUCT REGISTRY from this tool result ---
+                # --- UPDATE PRODUCT REGISTRY ---
                 product_registry = _update_product_registry(product_registry, api_response_data)
 
                 working_memory.append({
@@ -408,12 +423,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                     "content": json.dumps(api_response_data)
                 })
 
-        # Loop back to the top — the model now sees this round's tool
-        # results (including any "not recognized" errors) and can decide
-        # to call another tool (e.g. ai_omni_search) or answer directly.
-
-    # Exhausted MAX_TOOL_ROUNDS without a direct answer — force a
-    # synthesis call so the user still gets something instead of nothing.
+    # Exhausted MAX_TOOL_ROUNDS — force synthesis
     print("🧠 Translating database JSON into natural language...")
 
     synthesis_reminder = {

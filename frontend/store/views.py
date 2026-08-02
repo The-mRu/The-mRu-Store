@@ -18,6 +18,7 @@ from .services import (
     FASTAPI_BASE_URL,
     get_all_products,
     send_chat_message,
+    send_admin_chat_message,
     api_register_user,
     api_login_user,
     get_product,
@@ -141,22 +142,45 @@ def chat_interface_view(request):
     """Renders the AI chat page."""
     return render(request, 'store/chat.html')
 
-# def product_detail_view(request, product_id):
-#     """Fetches a single product's details for the product page."""
-#     # In a production app, you would fetch just the single product from FastAPI
-#     # For now, we filter it from the main list
-#     all_products = get_all_products() or []
-    
-#     product = next((p for p in all_products if str(p.get('id')) == str(product_id)), None)
-    
-#     if not product:
-#         # If someone types a bad URL, send them back home
-#         return redirect('catalog')
-        
-#     context = {
-#         'product': product
-#     }
-#     return render(request, 'store/product_detail.html', context)
+
+
+def api_admin_chat_proxy(request):
+    """Admin chat proxy — mirrors api_chat_proxy's session-handling pattern,
+    but admin_id comes ONLY from the trusted server-side admin session,
+    never from the request body."""
+    if request.method == "POST":
+        try:
+            admin_id = request.session.get('admin_id')
+            if not admin_id:
+                return JsonResponse({"error": "Unauthorized"}, status=401)
+
+            if not request.session.session_key:
+                request.session.create()
+                request.session.save()
+
+            session_id = request.session.session_key
+
+            data = json.loads(request.body)
+            user_message = data.get('message', '')
+
+            ai_response = send_admin_chat_message(user_message, session_id, admin_id)
+            return JsonResponse(ai_response, safe=False)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request"}, status=400)
+
+
+def admin_chat_interface_view(request):
+    """Renders the admin AI assistant page."""
+    if not request.session.get('admin_id'):
+        return redirect('admin_login')
+    return render(request, 'store/admin/ai_assistant.html')
+
+
+
+
+
 
 from bson.objectid import ObjectId
 from django.http import Http404

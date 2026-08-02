@@ -35,6 +35,22 @@ def send_chat_message(message: str, session_id: str, user_id: str = None):
         return {"reply": "Sorry, the AI assistant is currently offline."}
     
 
+def send_admin_chat_message(message: str, session_id: str, admin_id: str):
+    """Sends a message to the FastAPI Admin AI Assistant with session and admin tracking.
+    admin_id is required — there is no guest mode for admin chat."""
+
+    payload = {"message": message, "admin_id": admin_id}
+
+    try:
+        response = requests.post(f"{FASTAPI_BASE_URL}/chat/admin/{session_id}", json=payload)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        logger.error(f"Admin chatbot offline: {e}")
+        return {"reply": "Sorry, the admin AI assistant is currently offline."}
+
+
+
 def api_register_user(name, email, password):
     """Sends registration data to FastAPI (MongoDB)."""
     try:

@@ -122,7 +122,6 @@ async def get_order_items(order_id: str, user_id: str):
         })
     return {"order_id": real_order_id, "items": enriched_items}
 
-
 @router.post("/place")
 async def place_order(order: OrderRequest):
     """Places a new order, creates the payment record, and clears the user's cart."""
@@ -148,6 +147,30 @@ async def place_order(order: OrderRequest):
         })
     else:
         raise HTTPException(status_code=400, detail="Either address_id or shipping_address is required.")
+
+    # =========================================================================
+    # STOCK VALIDATION & DEDUCTION — check BEFORE creating the order
+    # =========================================================================
+    for item in order.items:
+        product_id = item.get("productId")
+        quantity = item.get("quantity", 1)
+        if not product_id:
+            continue
+
+        # Atomically decrement stock — only succeeds if enough stock exists
+        result = await db.Products.update_one(
+            {"id": product_id, "stock": {"$gte": quantity}},
+            {"$inc": {"stock": -quantity}}
+        )
+        if result.modified_count == 0:
+            # Either product doesn't exist or insufficient stock
+            product = await db.Products.find_one({"id": product_id}, {"name": 1, "stock": 1})
+            available = product["stock"] if product else 0
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for '{product.get('name', product_id)}'. Requested: {quantity}, Available: {available}"
+            )
+    # =========================================================================
 
     order_id = f"ord_{uuid.uuid4().hex[:8]}"
     total_amount = order.subtotal - order.discount + order.shipping_fee
@@ -181,6 +204,22 @@ async def place_order(order: OrderRequest):
         "deliveredAt": None,
     }
     await db.Orders.insert_one(order_data)
+
+    # =========================================================================
+    # CREATE OrderItems — required for Top Products analytics
+    # =========================================================================
+    now = datetime.datetime.utcnow()
+    for item in order.items:
+        await db.OrderItems.insert_one({
+            "orderId": order_id,
+            "productId": item.get("productId"),
+            "name": item.get("name", ""),
+            "quantity": item.get("quantity", 1),
+            "unitPrice": item.get("price", 0),
+            "totalPrice": item.get("price", 0) * item.get("quantity", 1),
+            "createdAt": now
+        })
+    # =========================================================================
 
     cart = await db.Carts.find_one({"userId": order.user_id})
     if cart:

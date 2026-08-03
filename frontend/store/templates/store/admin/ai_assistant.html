@@ -99,21 +99,27 @@
         }
 
         function addAiBubble(text) {
-            // Convert Markdown to HTML for structured responses
-            const formattedText = marked.parse(text);
-            
-            const aiBubble = `
-                <div class="flex gap-4">
-                    <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
-                        <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
-                    </div>
-                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm max-w-[80%] ai-message-content">
-                        ${formattedText}
-                    </div>
-                </div>
-            `;
-            chatContainer.insertAdjacentHTML('beforeend', aiBubble);
-        }
+    // Convert Markdown to HTML
+    let formattedText = marked.parse(text);
+    
+    // Remove all image tags (HTML)
+    formattedText = formattedText.replace(/<img[^>]*>/g, '');
+    
+    // Remove Markdown image syntax: ![alt](url)
+    formattedText = formattedText.replace(/!\[.*?\]\(.*?\)/g, '');
+    
+    const aiBubble = `
+        <div class="flex gap-4">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center flex-shrink-0 border border-indigo-200 dark:border-indigo-800">
+                <span class="text-indigo-600 dark:text-indigo-400 text-lg">✨</span>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 shadow-sm max-w-[80%] ai-message-content">
+                ${formattedText}
+            </div>
+        </div>
+    `;
+    chatContainer.insertAdjacentHTML('beforeend', aiBubble);
+}
 
         function addThinkingBubble() {
             const thinkingBubble = `
@@ -254,6 +260,24 @@
         border-color: #e5e7eb;
     }
     .dark .ai-message-content hr {
+        border-color: #4b5563;
+    }
+
+    /* Image size limits — target all possible containers */
+    .ai-message-content img,
+    .ai-message-content p img,
+    #chat-container img {
+        max-width: 40px !important;
+        max-height: 40px !important;
+        width: auto !important;
+        height: auto !important;
+        object-fit: contain;
+        border-radius: 0.25rem;
+        border: 1px solid #e5e7eb;
+        margin: 0.25rem 0;
+    }
+    .dark .ai-message-content img,
+    .dark #chat-container img {
         border-color: #4b5563;
     }
 </style>

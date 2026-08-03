@@ -6,7 +6,7 @@ from backend.db.database import db
 
 router = APIRouter()
 
-
+print(datetime.utcnow()) 
 def parse_date(date_str: str) -> datetime:
     """
     Parse a date string in any common format.
@@ -167,21 +167,114 @@ async def get_sales_analytics(compare: str = None):
 
 
 @router.get("/top-products")
-async def get_top_selling_products(limit: int = 5, order: str = "best"):
+async def get_top_selling_products(
+    start_date: str = Query(None, description="Start of the range, e.g. '2026-01-01', 'this week', 'last month', 'all time'"),
+    end_date: str = Query(None, description="End of the range, defaults to now if not given"),
+    limit: int = Query(10),
+    min_units: int = Query(1)
+):
+    now = datetime.utcnow()
+    limit = max(limit, 3)
+
+    # --- Resolve start_date ---
+    if not start_date or start_date.strip().lower() in ("all time", "all_time", "ever", "always", "alltime", "all-time"):
+        start = datetime(2000, 1, 1)
+        period_label = "all time"
+    else:
+        try:
+            start = parse_date(start_date)
+            period_label = start_date.strip()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid start_date: {e}")
+
+    # --- Resolve end_date ---
+    if end_date:
+        try:
+            end = parse_date(end_date) + timedelta(days=1)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid end_date: {e}")
+    else:
+        end = now
+
+    # --- Aggregate OrderItems ---
     pipeline = [
-        {"$group": {"_id": "$productId", "total_sold": {"$sum": "$quantity"}}},
-        {"$sort": {"total_sold": -1 if order == "best" else 1}},
+        {
+            "$lookup": {
+                "from": "Orders",
+                "localField": "orderId",
+                "foreignField": "id",
+                "as": "order"
+            }
+        },
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": start, "$lt": end}}},
+        {"$group": {
+            "_id": "$productId",
+            "total_sold": {"$sum": "$quantity"},
+            "total_revenue": {"$sum": "$totalPrice"}
+        }},
+        {"$match": {"total_sold": {"$gte": min_units}}},
+        {"$sort": {"total_sold": -1}},
         {"$limit": limit}
     ]
-    results = await db.OrderItems.aggregate(pipeline).to_list(limit)
+    top_items = await db.OrderItems.aggregate(pipeline).to_list(limit)
 
-    product_ids = [r["_id"] for r in results]
-    products = await db.Products.find({"id": {"$in": product_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(len(product_ids))
-    product_lookup = {p["id"]: p["name"] for p in products}
+    # --- Enrich with product details ---
+    product_ids = [item["_id"] for item in top_items]
+    product_map = {}
+    if product_ids:
+        products = await db.Products.find(
+            {"id": {"$in": product_ids}},
+            {"_id": 0, "id": 1, "name": 1, "price": 1, "thumbnail": 1, "stock": 1}
+        ).to_list(len(product_ids))
+        product_map = {p["id"]: p for p in products}
 
-    return {
-        "products": [
-            {"name": product_lookup.get(r["_id"], "Unknown product"), "units_sold": r["total_sold"]}
-            for r in results
-        ]
+    result = []
+    for item in top_items:
+        product = product_map.get(item["_id"], {})
+        result.append({
+            "product_id": item["_id"],
+            "name": product.get("name", "Unknown Product"),
+            "units_sold": item["total_sold"],
+            "revenue": round(item["total_revenue"], 2),
+            "current_price": product.get("price"),
+            "current_stock": product.get("stock", 0),
+        })
+
+    # --- Count total unique products sold (before min_units filter) ---
+    total_pipeline = [
+        {
+            "$lookup": {
+                "from": "Orders",
+                "localField": "orderId",
+                "foreignField": "id",
+                "as": "order"
+            }
+        },
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": start, "$lt": end}}},
+        {"$group": {"_id": "$productId"}},
+        {"$count": "total"}
+    ]
+    total_result = await db.OrderItems.aggregate(total_pipeline).to_list(1)
+    total_unique_products = total_result[0]["total"] if total_result else 0
+
+    # --- Build response ---
+    response = {
+        "period": period_label,
+        "period_start": start.strftime("%Y-%m-%d"),
+        "period_end": end.strftime("%Y-%m-%d"),
+        "total_unique_products_sold": total_unique_products,
+        "min_units_threshold": min_units,
+        "top_products": result,
     }
+
+    # --- Contextual notes ---
+    if not result:
+        response["message"] = f"No products sold {min_units}+ units in this period."
+        if total_unique_products > 0:
+            response["message"] += f" {total_unique_products} products sold fewer than {min_units} units."
+    elif total_unique_products < 5:
+        response["note"] = "Limited sales data for this period. Rankings reflect all available data."
+
+    return response

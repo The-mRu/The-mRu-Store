@@ -1,22 +1,18 @@
 # The-mRu-Store
 
-The-mRu-Store is a full-stack e-commerce demo project that combines a FastAPI backend, a Django storefront frontend, and an AI-powered assistant for semantic search, customer support, and admin analytics.
+The-mRu-Store is an experimental, chat-first e-commerce demo focused on the AI assistants (customer and admin). The frontend is intentionally minimal — the primary surface is the FastAPI-based chat API and the multi-round agent loop implemented in `agent/orchestrator.py`.
 
-It is designed to showcase how a modern online store can integrate:
-- product browsing and cart flows,
-- user authentication and order management,
-- admin management pages,
-- and an **agentic AI assistant** — one for customers, one for admins — built on OpenAI function-calling with a multi-round tool-use loop.
+Purpose: provide a well-scoped environment to build and evaluate conversational RAG agents that interact with product data, recommendations, orders, and support workflows.
 
-## Features
+## Features (chat-first)
 
-- FastAPI-based backend with REST endpoints for products, search, chat, orders, cart, support tickets, reviews, recommendations, and admin analytics
-- Django-based frontend for the customer storefront and admin dashboard
-- Hybrid product search: keyword (`$text`) + vector (sentence-transformer embeddings), merged via Reciprocal Rank Fusion, with category/brand/gender/price filtering
-- **Customer AI assistant** — 20 tools covering product discovery, recommendations/comparisons, order tracking, support tickets, and personalized recommendations, with a persistent product-ID registry that prevents the model from fabricating product IDs across a conversation
-- **Admin AI assistant** — a separate, admin-gated tool set for business intelligence: sales summaries, sales analytics, top-selling products, per-product performance analysis, and inventory alerts — all with flexible natural-language date parsing (`"today"`, `"last week"`, `"July 28, 2026"`, `"2 days ago"`, exact dates, or full ranges) instead of rigid enums
-- Multi-round agentic loop: the model can call a tool, inspect the result, and call further tools in the same turn — enabling self-correction (e.g., resolving a product name to a real ID before analyzing it) without waiting for the next user message
-- Support for cart, checkout, user accounts, order history, and product browsing
+- Chat-first architecture: FastAPI chat endpoints and agent loop are the main integration surface.
+- Rich customer AI assistant: tools for discovery, comparisons, recommendations, order tracking, and support tickets; product-ID registry prevents fabrication of IDs.
+- Admin AI assistant: permission-gated analytics tools for revenue, top-selling items, stock alerts, and flexible date parsing.
+- Hybrid search backing the assistant: keyword + vector search (sentence-transformer embeddings) with filters and rank fusion.
+- Multi-round agent loop: model can call tools, inspect responses, and call additional tools in the same turn for robust, self-correcting behavior.
+
+Frontend: minimal storefront provided for manual testing and demoing chat flows — not the project's core focus.
 
 ## Tech Stack
 
@@ -35,62 +31,61 @@ It is designed to showcase how a modern online store can integrate:
 
 The diagram above shows the high-level flow of the system: the user-facing frontend, the FastAPI backend, the AI assistant layer (customer and admin), and the data/document processing pipeline.
 
-## AI Assistant Overview
+## AI Assistant Overview (concise)
 
-### Customer assistant
-Handles product discovery, comparisons, recommendations, order status, and support tickets, scoped to the logged-in user's session. A product-ID registry tracks every product returned by prior tool calls in a conversation, so the assistant can only reference real IDs — never guessed ones — when looking up reviews, comparisons, or similar items.
+Customer assistant
+- Handles product discovery, comparisons, recommendations, order status, and support tickets. Conversation state includes a product-ID registry to avoid fabricated IDs.
 
-### Admin assistant
-A separate, permission-gated assistant (verified server-side against the `Admins` collection) for store-management questions like:
-- "What's our revenue today / this week / for a specific date range?"
-- "What are our best-selling products this month?"
-- "Why isn't [product] selling well?"
-- "What's out of stock or at risk of stocking out soon?"
+Admin assistant
+- Permission-gated assistant for BI-style queries (revenue, best-sellers, stock alerts). Admin requests are validated server-side against the `Admins` collection.
 
-Product-specific questions are resolved in two steps — the assistant first looks up the real product ID from the name mentioned, then requests performance data using that ID, rather than guessing an ID directly.
+Note: tool dispatch and product-ID resolution are implemented in code (see `agent/orchestrator.py`) to reduce prompt brittleness.
 
-## Getting Started
+## Quickstart — Chat-first (local)
 
-### 1. Clone the repository
+1. Clone and enter:
 
 ```bash
 git clone <your-repo-url>
 cd The-mRu-store
 ```
 
-### 2. Create and activate a virtual environment
+2. Create & activate a venv (Windows example):
 
-```bash
+```powershell
 python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-
-# macOS / Linux
-source .venv/bin/activate
+.venv\Scripts\Activate.ps1
 ```
 
-### 3. Install dependencies
+3. Install Python deps:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Run the backend
+4. Provide secrets via `.env` or environment variables (see `.env.example`). Minimal required keys:
 
-From the project root:
+- `OPENAI_API_KEY`
+- `MONGO_URI` (optional for demo but recommended)
+- `MONGO_DB_NAME`
+
+5. Start the backend (agent + chat endpoints):
 
 ```bash
 uvicorn main_db_server:app --reload
 ```
 
-The backend will be available at:
-- `http://127.0.0.1:8000/docs` for FastAPI Swagger documentation
-- `http://127.0.0.1:8000/` for the root API endpoint
+6. Explore the API and chat endpoints at:
 
-### 5. Run the frontend
+- `http://127.0.0.1:8000/docs` (OpenAPI) — use this to find the live chat endpoints
 
-From the frontend folder:
+Example: a generic chat POST (adjust path per your API):
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/chat" -H "Content-Type: application/json" -d '{"user_id":"user@example.com","message":"Show me running shoes under $100"}'
+```
+
+Frontend (optional demo):
 
 ```bash
 cd frontend
@@ -98,30 +93,31 @@ python manage.py migrate
 python manage.py runserver 8080
 ```
 
-Then open:
-- `http://127.0.0.1:8080/` for the storefront
-- `http://127.0.0.1:8080/admin/` for Django admin (if enabled)
+Visit `http://127.0.0.1:8080/` for the minimal storefront and `http://127.0.0.1:8080/admin/` for Django admin.
 
 ## Environment Setup
 
-The backend may require environment variables such as:
-- `OPENAI_API_KEY`
-- `MONGO_URI`
+The backend requires a few environment variables. Create a `.env` in the project root or export these variables in your shell. See the included `.env.example` for guidance.
+
+Required (or strongly recommended):
+- `OPENAI_API_KEY` — required for full chat/assistant functionality
+- `MONGO_URI` — recommended (if omitted, some features run in demo mode)
 - `MONGO_DB_NAME`
 
-Create a `.env` file in the project root if needed for local development.
+Security: never commit real API keys to version control. Use a secrets manager or CI encrypted variables for production.
+
 
 ## Data and AI Setup
 
-To enable full search and AI functionality, run the support scripts:
+Populate sample data and generate vectors used by the assistant:
 
 ```bash
-python scripts/seed_data.py
-python scripts/backfill_vectors.py
-python scripts/ingest_docs.py
+python scripts/seed_data.py          # seeds products, users, orders (demo)
+python scripts/backfill_vectors.py   # compute or recompute product embeddings
+python scripts/ingest_docs.py        # ingest support docs for RAG
 ```
 
-These scripts help populate product data, generate embeddings, and ingest documents for the AI assistant.
+If you do not run the above, the assistant may operate in a limited/demo mode.
 
 ## How to Use
 

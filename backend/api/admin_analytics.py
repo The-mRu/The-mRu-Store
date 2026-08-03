@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 from backend.db.database import db
+import re
 
 
 router = APIRouter()
@@ -110,7 +111,10 @@ async def get_business_summary(
     revenue_result = await db.Orders.aggregate(revenue_pipeline).to_list(1)
     revenue = revenue_result[0]["total"] if revenue_result else 0
 
-    new_customers = await db.Users.count_documents({"createdAt": {"$gte": start, "$lt": end}})
+    # new_customers = await db.Users.count_documents({"createdAt": {"$gte": start, "$lt": end}})
+    new_customers = await db.Users.count_documents({"created_at": {"$gte": start, "$lt": end}})
+    
+    
 
     # Only include current low stock for "today" — not meaningful for historical/future dates
     is_today = (start.date() == now.date())
@@ -278,3 +282,110 @@ async def get_top_selling_products(
         response["note"] = "Limited sales data for this period. Rankings reflect all available data."
 
     return response
+
+# backend/api/admin_analytics.py — add a resolve step
+@router.get("/resolve-product")
+async def resolve_product_name(product_name: str = Query(...)):
+    """Resolve a product name to its real id — admin equivalent of the customer-side registry lookup."""
+    product = await db.Products.find_one(
+        {"name": {"$regex": re.escape(product_name), "$options": "i"}},  # NOT anchored — matches anywhere in the name
+        {"_id": 0, "id": 1, "name": 1}
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail=f"No product found matching '{product_name}'.")
+    return product
+
+
+@router.get("/product-performance")
+async def get_product_performance(product_id: str = Query(...)):
+    """Now takes a real product_id, not a name — resolution happens upstream."""
+    product = await db.Products.find_one(
+        {"id": product_id},
+        {"_id": 0, "id": 1, "name": 1, "price": 1, "discountPrice": 1, "rating": 1, "totalReviews": 1, "stock": 1, "categoryId": 1, "brandId": 1}
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found.")
+
+    product_id = product["id"]
+
+    # Sales history via the same $lookup pattern used in top-products
+    sales_pipeline = [
+        {"$match": {"productId": product_id}},
+        {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
+        {"$unwind": "$order"},
+        {"$group": {
+            "_id": None,
+            "total_sold": {"$sum": "$quantity"},
+            "total_revenue": {"$sum": "$totalPrice"},
+            "first_sale": {"$min": "$order.orderedAt"},
+            "last_sale": {"$max": "$order.orderedAt"}
+        }}
+    ]
+    sales_result = await db.OrderItems.aggregate(sales_pipeline).to_list(1)
+    sales = sales_result[0] if sales_result else {"total_sold": 0, "total_revenue": 0, "first_sale": None, "last_sale": None}
+
+    # Category average price, for price-competitiveness context
+    category_avg_pipeline = [
+        {"$match": {"categoryId": product.get("categoryId"), "status": "active"}},
+        {"$group": {"_id": None, "avg_price": {"$avg": "$price"}}}
+    ]
+    category_avg_result = await db.Products.aggregate(category_avg_pipeline).to_list(1)
+    category_avg_price = category_avg_result[0]["avg_price"] if category_avg_result else None
+
+    # Recent review comments, for qualitative signal
+    recent_reviews = await db.Reviews.find(
+        {"productId": product_id}, {"_id": 0, "rating": 1, "comment": 1}
+    ).sort("createdAt", -1).limit(5).to_list(5)
+
+    return {
+        "product_name": product["name"],
+        "price": product.get("price"),
+        "discount_price": product.get("discountPrice"),
+        "category_average_price": round(category_avg_price, 2) if category_avg_price else None,
+        "current_stock": product.get("stock", 0),
+        "rating": product.get("rating", 0.0),
+        "total_reviews": product.get("totalReviews", 0),
+        "recent_review_comments": [r["comment"] for r in recent_reviews],
+        "total_units_sold": sales.get("total_sold", 0),
+        "total_revenue": round(sales.get("total_revenue", 0), 2),
+        "first_sale_date": sales["first_sale"].strftime("%Y-%m-%d") if sales.get("first_sale") else None,
+        "last_sale_date": sales["last_sale"].strftime("%Y-%m-%d") if sales.get("last_sale") else None,
+    }
+    
+@router.get("/inventory-alerts")
+async def get_inventory_alerts(low_stock_threshold: int = 10):
+    out_of_stock = await db.Products.find(
+        {"stock": 0, "status": "active"}, {"_id": 0, "id": 1, "name": 1, "stock": 1}
+    ).to_list(50)
+
+    low_stock = await db.Products.find(
+        {"stock": {"$gt": 0, "$lte": low_stock_threshold}, "status": "active"},
+        {"_id": 0, "id": 1, "name": 1, "stock": 1}
+    ).sort("stock", 1).to_list(50)
+
+    # "Will run out soon" — products with meaningful recent sales velocity vs low remaining stock
+    velocity_pipeline = [
+        {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": datetime.utcnow() - timedelta(days=30)}}},
+        {"$group": {"_id": "$productId", "sold_last_30d": {"$sum": "$quantity"}}}
+    ]
+    velocity = await db.OrderItems.aggregate(velocity_pipeline).to_list(200)
+    velocity_map = {v["_id"]: v["sold_last_30d"] for v in velocity}
+
+    at_risk = []
+    for p in low_stock:
+        sold = velocity_map.get(p["id"], 0)
+        if sold > 0:
+            days_of_stock_left = round((p["stock"] / sold) * 30, 1) if sold else None
+            at_risk.append({**p, "sold_last_30_days": sold, "estimated_days_of_stock_left": days_of_stock_left})
+
+    return {
+    "has_out_of_stock_items": len(out_of_stock) > 0,
+    "out_of_stock_count": len(out_of_stock),
+    "out_of_stock": out_of_stock,
+    "has_low_stock_items": len(low_stock) > 0,
+    "low_stock_count": len(low_stock),
+    "low_stock": low_stock,
+    "at_risk_of_stockout_soon": at_risk
+}

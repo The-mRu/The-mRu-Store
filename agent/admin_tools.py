@@ -28,6 +28,15 @@ regardless of what you might otherwise assume. Do NOT claim any date is "in the 
 - If the response includes a "low_stock_note", mention it briefly so the admin understands the number reflects current inventory, not the queried date.
 - Example: "7 products are currently low in stock (current inventory status)."
 
+### PRODUCT PERFORMANCE LOOKUP
+- To analyze a product's performance, ALWAYS call resolve_product_name first to get its real product_id, then call get_product_performance with that id. Never guess or construct a product_id.
+
+### INVENTORY ALERTS
+- get_inventory_alerts returns "has_out_of_stock_items" (true/false) and "has_low_stock_items" (true/false) as explicit flags — check these FIRST.
+- If "has_out_of_stock_items" is true, you MUST list every item in "out_of_stock" — do not say "no products are out of stock" when this flag is true, under any circumstance.
+- If "has_low_stock_items" is true, mention items in "low_stock" and "at_risk_of_stockout_soon" for restocking guidance.
+- These are independent flags — one being false does not mean the other is also false.
+
 ### ACCURACY RULE
 - NEVER state a number that didn't come from a tool result in this conversation.
 - If data seems incomplete or a metric might be affected by known limitations, say so honestly.
@@ -92,5 +101,65 @@ admin_tools = [
             }
         }
     }
-}
+},
+# {
+#     "type": "function",
+#     "function": {
+#         "name": "get_product_performance",
+#         "description": "Get comprehensive performance data for a product — sales history, price vs category average, rating, and reviews. Use to answer 'why isn't X selling', 'how is X performing'.",
+#         "parameters": {
+#             "type": "object",
+#             "properties": {
+#                 "product_name": {"type": "string"}
+#             },
+#             "required": ["product_name"]
+#         }
+#     }
+# },
+{
+    "type": "function",
+    "function": {
+        "name": "get_product_performance",
+        "description": "Get comprehensive performance data for a product — sales history, price vs category average, rating, and reviews. Use to answer 'why isn't X selling', 'how is X performing'. Requires a real product_id — call resolve_product_name FIRST to obtain it from a product name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string",
+                    "description": "The real product id, obtained from calling resolve_product_name first — never guess this."
+                }
+            },
+            "required": ["product_id"]
+        }
+    }
+},
+{
+    "type": "function",
+    "function": {
+        "name": "get_inventory_alerts",
+        "description": "Get out-of-stock products, low-stock products, and products likely to run out soon based on recent sales velocity.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "low_stock_threshold": {"type": "integer", "nullable": True, "description": "Stock level below which a product is considered low, default 10."}
+            }
+        }
+    }
+},{
+    "type": "function",
+    "function": {
+        "name": "resolve_product_name",
+        "description": "Resolve a product name (even partial or approximate) to its real product_id. ALWAYS call this before get_product_performance — never guess or pass a name directly to that tool.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "product_name": {
+                    "type": "string",
+                    "description": "The product name as mentioned by the user, e.g. 'Levi's 501 Jeans'"
+                }
+            },
+            "required": ["product_name"]
+        }
+    }
+},
 ]

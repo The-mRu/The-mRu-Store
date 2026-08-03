@@ -219,6 +219,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
             tools=tools_to_use,  
             tool_choice="auto"
         )
+        # print(f"DEBUG working_memory going into admin synthesis: {json.dumps(working_memory[-3:], default=str, indent=2)}")
 
         ai_message = response.choices[0].message
         working_memory.append(ai_message)
@@ -404,6 +405,16 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                         elif function_name == "get_top_selling_products":
                             res = await http_client.get(f"{API_BASE_URL}/admin/top-products", params=arguments)
                             api_response_data = res.json()
+                        elif function_name == "get_inventory_alerts":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/inventory-alerts", params=arguments)
+                            api_response_data = res.json()
+                        elif function_name == "get_product_performance":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/product-performance", params=arguments)
+                            api_response_data = res.json()
+                        elif function_name == "resolve_product_name":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/resolve-product", params=arguments)
+                            api_response_data = res.json()    
+                        
                         # =========================================================================
 
                     except Exception as e:

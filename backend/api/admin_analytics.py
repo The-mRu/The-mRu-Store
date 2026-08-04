@@ -1,13 +1,13 @@
 # backend/api/admin_analytics.py
 from fastapi import APIRouter, HTTPException, Query
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from backend.db.database import db
 import re
 
 
 router = APIRouter()
 
-print(datetime.utcnow()) 
+print(datetime.now(UTC)) 
 def parse_date(date_str: str) -> datetime:
     """
     Parse a date string in any common format.
@@ -26,7 +26,7 @@ def parse_date(date_str: str) -> datetime:
     date_str = date_str.strip().lower()
     
     # Handle relative dates
-    now = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     if date_str in ("today", "today's"):
         return now
     if date_str in ("yesterday", "yesterday's"):
@@ -80,7 +80,7 @@ async def get_business_summary(
     period: str = Query("today", description="today | yesterday | week"),
     date: str = Query(None, description="Specific date. Supports: YYYY-MM-DD, DD/MM/YYYY, 'today', 'yesterday', 'July 28, 2026', '2 days ago', etc.")
 ):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     if date:
         try:
@@ -140,7 +140,7 @@ async def get_business_summary(
 
 @router.get("/analytics")
 async def get_sales_analytics(compare: str = None):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     this_week_start = now - timedelta(days=7)
 
     pipeline = [
@@ -177,7 +177,7 @@ async def get_top_selling_products(
     limit: int = Query(10),
     min_units: int = Query(1)
 ):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     limit = max(limit, 3)
 
     # --- Resolve start_date ---
@@ -367,7 +367,7 @@ async def get_inventory_alerts(low_stock_threshold: int = 10):
     velocity_pipeline = [
         {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
         {"$unwind": "$order"},
-        {"$match": {"order.orderedAt": {"$gte": datetime.utcnow() - timedelta(days=30)}}},
+        {"$match": {"order.orderedAt": {"$gte": datetime.now(UTC) - timedelta(days=30)}}},
         {"$group": {"_id": "$productId", "sold_last_30d": {"$sum": "$quantity"}}}
     ]
     velocity = await db.OrderItems.aggregate(velocity_pipeline).to_list(200)
@@ -389,3 +389,109 @@ async def get_inventory_alerts(low_stock_threshold: int = 10):
     "low_stock": low_stock,
     "at_risk_of_stockout_soon": at_risk
 }
+    
+@router.get("/tickets-summary")
+async def get_pending_tickets_summary():
+    """Get a summary of open support tickets — urgent, oldest unanswered, and unassigned."""
+    open_tickets = await db.SupportTickets.find(
+        {"status": {"$in": ["open", "under review"]}},
+        {"_id": 0, "id": 1, "subject": 1, "status": 1, "priority": 1, "createdAt": 1, "assignedAdmin": 1, "userId": 1}
+    ).sort("createdAt", 1).to_list(100)
+
+    # Get user contact info for all ticket owners
+    user_ids = list(set(t["userId"] for t in open_tickets if t.get("userId")))
+    user_map = {}
+    if user_ids:
+        users = await db.Users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1}
+        ).to_list(len(user_ids))
+        user_map = {u["id"]: u for u in users}
+
+    def attach_user(ticket):
+        user = user_map.get(ticket.get("userId"), {})
+        return {
+            "ticket_id": ticket.get("id"),
+            "subject": ticket.get("subject", "No Subject"),
+            "status": ticket.get("status"),
+            "priority": ticket.get("priority", "normal"),
+            "assigned_admin": ticket.get("assignedAdmin"),
+            "created_at": ticket["createdAt"].strftime("%B %d, %Y") if ticket.get("createdAt") else None,
+            "user_name": user.get("name", "Unknown"),
+            "user_email": user.get("email", "No email"),
+        }
+
+    urgent_tickets = [attach_user(t) for t in open_tickets if t.get("priority") == "urgent"]
+    urgent_ids = {t["ticket_id"] for t in urgent_tickets}
+    unassigned = [attach_user(t) for t in open_tickets if t.get("assignedAdmin") in (None, "unassigned")]
+    oldest_unanswered = [attach_user(t) for t in open_tickets if t["id"] not in urgent_ids][:5]
+
+    return {
+        "has_open_tickets": len(open_tickets) > 0,
+        "total_open_tickets": len(open_tickets),
+        "has_urgent_tickets": len(urgent_tickets) > 0,
+        "total_urgent_tickets": len(urgent_tickets),
+        "urgent_tickets": urgent_tickets,
+        "oldest_unanswered": oldest_unanswered,
+        "has_unassigned_tickets": len(unassigned) > 0,
+        "unassigned_tickets": unassigned[:5],
+    }
+    
+@router.get("/order-status-breakdown")
+async def get_order_status_breakdown(
+    start_date: str = Query(None, description="Start of range. Defaults to past week."),
+    end_date: str = Query(None, description="End of range. Defaults to now.")
+):
+    now = datetime.now(UTC)
+
+    if start_date:
+        try:
+            start = parse_date(start_date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        start = now - timedelta(days=7)
+
+    end = parse_date(end_date) + timedelta(days=1) if end_date else now
+
+    # Status breakdown
+    pipeline = [
+        {"$match": {"orderedAt": {"$gte": start, "$lt": end}}},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]
+    results = await db.Orders.aggregate(pipeline).to_list(20)
+    breakdown = {r["_id"]: r["count"] for r in results}
+
+    stuck_processing = breakdown.get("Processing", 0)
+
+    # Actual stuck orders with details
+    stuck_orders = []
+    if stuck_processing > 0:
+        raw_orders = await db.Orders.find(
+            {"orderedAt": {"$gte": start, "$lt": end}, "status": "Processing"},
+            {"_id": 0, "id": 1, "totalAmount": 1, "orderedAt": 1, "userId": 1}
+        ).sort("orderedAt", 1).limit(20).to_list(20)
+
+        # Get user names for these orders
+        user_ids = list(set(o.get("userId") for o in raw_orders if o.get("userId")))
+        users = await db.Users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "name": 1}
+        ).to_list(len(user_ids)) if user_ids else []
+        user_map = {u["id"]: u.get("name", "Unknown") for u in users}
+
+        for o in raw_orders:
+            stuck_orders.append({
+                "order_id": o["id"],
+                "amount": o.get("totalAmount"),
+                "ordered_at": o["orderedAt"].strftime("%Y-%m-%d") if o.get("orderedAt") else None,
+                "customer": user_map.get(o.get("userId"), "Unknown")
+            })
+
+    return {
+        "period_start": start.strftime("%Y-%m-%d"),
+        "period_end": end.strftime("%Y-%m-%d"),
+        "breakdown": breakdown,
+        "stuck_processing_count": stuck_processing,
+        "stuck_orders": stuck_orders,
+    }

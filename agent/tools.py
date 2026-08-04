@@ -233,6 +233,17 @@ ecommerce_tools = [
     ### Support Ticket Management Functions
 
     {
+    "type": "function",
+    "function": {
+        "name": "get_user_tickets",
+        "description": "Get all support tickets for the currently logged-in user. Use when the user asks 'show my tickets', 'what tickets do I have', or wants to see their ticket history.",
+        "parameters": {
+            "type": "object",
+            "properties": {}
+        }
+    }
+},
+    {
         "type": "function",
         "function": {
             "name": "create_support_ticket",

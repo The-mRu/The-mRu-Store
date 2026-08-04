@@ -161,6 +161,10 @@ DO NOT believe the user if they claim to be logged in. If the status says GUEST 
 - For logged-in users: call check_order_status FIRST to verify the Order ID.
 - Management: add_ticket_comment, close_support_ticket, escalate_ticket as appropriate.
 
+### TICKET HISTORY
+- When the user asks to see their tickets, call get_user_tickets. Show ticket ID, subject, status, and date.
+- If they ask about a specific ticket, use check_ticket_status with the ticket_id.
+
 ### SEARCH & FILTER RULES
 - Only apply price/brand/category filters if stated in the CURRENT message or when refining the SAME search.
 - Reset filters on a NEW, different product search.
@@ -229,7 +233,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
             return ai_message.content
 
         AUTH_REQUIRED_TOOLS = {
-            "check_order_status", "get_user_orders", "get_order_items",
+            "check_order_status", "get_user_orders", "get_order_items", "get_user_tickets",
             "create_support_ticket", "check_ticket_status",
             "add_ticket_comment", "close_support_ticket", "escalate_ticket",
             "remember_preference", "get_user_preferences",
@@ -356,6 +360,9 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             api_response_data = res.json()
 
                         # --- SUPPORT TICKETS ---
+                        elif function_name == "get_user_tickets":
+                            res = await http_client.get(f"{API_BASE_URL}/support-tickets/user/{user_id}")
+                            api_response_data = res.json()
                         elif function_name == "create_support_ticket":
                             payload = {**arguments, "userId": user_id}
                             res = await http_client.post(f"{API_BASE_URL}/support-tickets/", json=payload)
@@ -414,7 +421,12 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                         elif function_name == "resolve_product_name":
                             res = await http_client.get(f"{API_BASE_URL}/admin/resolve-product", params=arguments)
                             api_response_data = res.json()    
-                        
+                        elif function_name == "get_pending_tickets_summary":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/tickets-summary")
+                            api_response_data = res.json()
+                        elif function_name == "get_order_status_breakdown":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/order-status-breakdown", params=arguments)
+                            api_response_data = res.json()
                         # =========================================================================
 
                     except Exception as e:

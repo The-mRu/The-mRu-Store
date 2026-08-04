@@ -201,3 +201,28 @@ async def escalate_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found.")
 
     return {"status": "success", "message": "Ticket escalated to human administrators."}
+
+@router.get("/user/{user_id}")
+async def get_user_tickets(user_id: str):
+    """Return all support tickets for a specific user."""
+    tickets = await db.SupportTickets.find(
+        {"userId": user_id},
+        {"_id": 0, "id": 1, "subject": 1, "status": 1, "createdAt": 1, "orderId": 1}
+    ).sort("createdAt", -1).to_list(length=50)
+
+    if not tickets:
+        return {"tickets": [], "message": "No tickets found."}
+
+    return {
+        "tickets": [
+            {
+                "ticket_id": t.get("id"),
+                "subject": t.get("subject", "No Subject"),
+                "status": t.get("status", "open"),
+                "order_id": t.get("orderId"),
+                "created_at": t.get("createdAt").strftime("%B %d, %Y") if t.get("createdAt") else None
+            }
+            for t in tickets
+        ],
+        "total": len(tickets)
+    }

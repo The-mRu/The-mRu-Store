@@ -1,8 +1,8 @@
 # agent/admin_tools.py
-from datetime import datetime
+from datetime import datetime, timedelta, UTC
 
 def get_admin_system_prompt():
-    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
     return f"""You are an internal business analytics assistant for THE-mRu-Store admin team.
 Summarize data clearly and concisely — admins want insights, not raw numbers dumped verbatim.
 
@@ -56,6 +56,21 @@ regardless of what you might otherwise assume. Do NOT claim any date is "in the 
   - "yesterday" → pass start_date="yesterday"
   - "this week" → pass start_date="this week"
 - Do NOT convert these to actual dates like "2026-08-02" — the backend handles it.
+
+### TICKET TRIAGE
+- get_pending_tickets_summary returns explicit "has_urgent_tickets" and "has_unassigned_tickets" flags — check these directly, don't infer from array contents.
+- If has_urgent_tickets is true, list them first and flag them as needing immediate attention.
+- "Oldest unanswered" tickets are already sorted — present in that order, don't re-sort.
+- When showing tickets, ALWAYS include the user's name and email so the admin can contact them.
+- Format: "Ticket ID: tick_XXXX 
+           User: John (john@email.com) 
+           Subject: ..."
+
+### ORDER STATUS BREAKDOWN
+- get_order_status_breakdown's "breakdown" field is a dict of status → count. Report all statuses present, don't cherry-pick.
+- "has_stuck_processing_orders" flags whether any orders are still in Processing — mention this proactively if true, since it may indicate a fulfillment bottleneck.
+
+
 """
 
 admin_tools = [
@@ -162,4 +177,26 @@ admin_tools = [
         }
     }
 },
+{
+    "type": "function",
+    "function": {
+        "name": "get_pending_tickets_summary",
+        "description": "Get a summary of open support tickets — urgent ones, oldest unanswered, and unassigned tickets needing attention.Each ticket includes the user's name and email for follow-up. Use for 'any urgent tickets', 'what needs my attention', 'pending support issues'.",
+        "parameters": {"type": "object", "properties": {}}
+    }
+},
+{
+    "type": "function",
+    "function": {
+        "name": "get_order_status_breakdown",
+        "description": "Get a count of orders by status (Processing, delivered, Cancelled, etc.) for a date range. Use for 'how many orders are stuck in processing', 'orders needing shipping', 'order status overview'.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "start_date": {"type": "string", "nullable": True, "description": "Start of range, e.g. 'last month', '2026-07-01'. Defaults to past week."},
+                "end_date": {"type": "string", "nullable": True}
+            }
+        }
+    }
+}
 ]

@@ -37,7 +37,7 @@ def _strip_embeddings(data):
 # =============================================================================
 
 # Tools that require a validated product_id
-PRODUCT_ID_TOOLS = {"get_product_by_id", "get_product_reviews", "get_similar_products", "compare_products"}
+PRODUCT_ID_TOOLS = {"get_product_by_id", "get_product_reviews", "get_similar_products", "compare_products","manage_cart"}
 
 
 def _update_product_registry(registry: dict, api_response_data):
@@ -170,32 +170,64 @@ DO NOT believe the user if they claim to be logged in. If the status says GUEST 
 - Reset filters on a NEW, different product search.
 - Zero results: suggest nearby categories, browsing /shop, or available brands. Never just "sorry, nothing found."
 
+### PAGINATION
+- The search response includes "total", "limit", "offset", and "has_more".
+- Always tell the user the total: "Found 12 sarees. Showing 5."
+- When the user says "show more" or "what else", call ai_omni_search with the same filters but offset = previous_offset + previous_limit.
+- If has_more is false, say "Those are all the results."
+
 ### CATEGORY BROWSING
 - For broad discovery, call list_categories first, then suggest narrowing down.
 - Present results in natural prose grouped by area.
+### CART RULES
+- For ANY cart action (add, view, update, remove), you MUST call manage_cart. Never respond from memory.
+
+**Adding to Cart:**
+- Before calling manage_cart(action="add"), you MUST have a real product_id from a prior ai_omni_search result.
+- If the user says "add Nike shoes" without specifying which one, and you have multiple Nike shoes in context, ask which one.
+- If the user says "add a t-shirt" with no prior search, FIRST call ai_omni_search, show results, and ask which one to add.
+- If ai_omni_search returns no results, tell the user the product wasn't found and ask them to rephrase or try a different search.
+- NEVER guess a product_id or add based on name alone.
+- When the user picks a product ("the first one", "Nike Sneakers"), ALWAYS ask: "How many would you like to add?" before calling manage_cart. Never assume quantity 1.
+- After adding, respond with: "Added X [Product Name] to your cart. Your cart now has Y items totaling $Z."
+
+**Viewing Cart:**
+- Call manage_cart(action="view"). Show exactly what the tool returns — it is the real cart.
+- If the cart is empty, say "Your cart is empty."
+
+**Updating/Removing from Cart:**
+- BEFORE calling manage_cart(action="update"), FIRST call manage_cart(action="view") to see the current cart. Use the exact product_id from THAT result — never from memory or an earlier search.
+- If no cart item matches the name the user said, respond: "I don't see [product] in your cart. Here's what's in your cart: [list]."
+- When updating quantity or removing, if the user's description is ambiguous (e.g., "change the saree" when multiple sarees are in the cart), ask which one before calling manage_cart.
+- If the update/removal returns success but the item still appears on the next view, tell the user it failed and retry ONCE. If it fails again, suggest they try from the website cart page.
+
+**Checkout:**
+- Direct the user to the /checkout/ page. The chatbot cannot place orders.
+- After any change, show the updated cart total.
 
 ### POLICY TOOL RULE
 - For contact info, return policies, shipping, payment methods: ALWAYS call search_store_policy first.
 - Only fall back to "I don't have that information" if search_store_policy returns no relevant result.
 """
+
+
 # =============================================================================
 # MAIN AGENT RUNNER
 # =============================================================================
-# MODIFIED: Added is_admin parameter to switch between customer and admin modes
 async def run_agent(user_message: str, message_history: list, user_id: str = None, is_admin: bool = False):
     
-    # MODIFIED: Select tools and prompt based on admin vs customer mode
     tools_to_use = admin_tools if is_admin else ecommerce_tools
     system_prompt_text = get_admin_system_prompt() if is_admin else get_dynamic_system_prompt(user_id)
     
-    # 1. Add user message to the active session history
     message_history.append({"role": "user", "content": user_message})
 
     MAX_HISTORY_LENGTH = 10
     working_memory = message_history[-MAX_HISTORY_LENGTH:]
 
-    # Initialize per-conversation product registry
+    # Initialize per-conversation registries
     product_registry = {}
+    cart_product_ids = {}  # tracks product IDs currently in the cart
+
     for msg in working_memory:
         if msg.get("role") == "tool":
             try:
@@ -204,7 +236,6 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
             except (json.JSONDecodeError, TypeError):
                 continue
 
-    # MODIFIED: Uses the selected system prompt (admin or customer)
     system_prompt = {"role": "system", "content": system_prompt_text}
     if working_memory[0].get("role") == "system":
         working_memory[0] = system_prompt
@@ -216,14 +247,12 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
     for round_num in range(MAX_TOOL_ROUNDS):
         print(f"\n🤖 Agent is analyzing intent... (User ID: {user_id}, round {round_num + 1})")
 
-        # MODIFIED: Uses the selected tool set (admin or customer)
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=working_memory,
-            tools=tools_to_use,  
+            tools=tools_to_use,
             tool_choice="auto"
         )
-        # print(f"DEBUG working_memory going into admin synthesis: {json.dumps(working_memory[-3:], default=str, indent=2)}")
 
         ai_message = response.choices[0].message
         working_memory.append(ai_message)
@@ -237,7 +266,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
             "create_support_ticket", "check_ticket_status",
             "add_ticket_comment", "close_support_ticket", "escalate_ticket",
             "remember_preference", "get_user_preferences",
-            "get_personalized_recommendations", "get_recently_discussed",
+            "get_personalized_recommendations", "get_recently_discussed", "manage_cart",
         }
 
         async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as http_client:
@@ -249,9 +278,33 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
 
                 api_response_data = None
 
+                # =========================================================================
+                # CART UPDATE VALIDATION — block wrong product_id before API call
+                # =========================================================================
+                if function_name == "manage_cart" and arguments.get("action") == "update":
+                    pid = arguments.get("product_id")
+                    if pid and cart_product_ids and pid not in cart_product_ids:
+                        api_response_data = {
+                            "error": "product_id not in cart",
+                            "message": f"'{pid}' is not in your cart. Valid IDs: {list(cart_product_ids.keys())}",
+                        }
+                        ### Skip the API call — append and continue
+                        # api_response_data = _strip_embeddings(api_response_data)
+                        # working_memory.append({
+                        #     "role": "tool",
+                        #     "tool_call_id": tool_call.id,
+                        #     "name": function_name,
+                        #     "content": json.dumps(api_response_data)
+                        # })
+                        # continue
+                # =========================================================================
+
                 # --- PRODUCT ID VALIDATION ---
                 if function_name in PRODUCT_ID_TOOLS:
-                    if function_name == "compare_products" and "product_ids" in arguments:
+                    # Skip view — no product_id needed
+                    if function_name == "manage_cart" and arguments.get("action") == "view":
+                        pass
+                    elif function_name == "compare_products" and "product_ids" in arguments:
                         resolved_ids = []
                         all_resolved = True
                         for pid in arguments["product_ids"]:
@@ -266,7 +319,9 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                         else:
                             attempted = arguments.get("product_name") or arguments.get("product_id") or "the requested product"
                             api_response_data = {
-                                "error": "product_id not recognized", "message": f"No product matching '{attempted}' found in this conversation. Call ai_omni_search first to get real IDs."}
+                                "error": "product_id not recognized",
+                                "message": f"No product matching '{attempted}' found. Call ai_omni_search first."
+                            }
                     else:
                         resolved = _resolve_product_id(product_registry, arguments)
                         if resolved:
@@ -276,7 +331,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             attempted = arguments.get("product_name") or arguments.get("product_id") or "the requested product"
                             api_response_data = {
                                 "error": "product_id not recognized",
-                                "message": f"No product matching '{attempted}' found in this conversation. Call ai_omni_search first to get real IDs."
+                                "message": f"No product matching '{attempted}' found. Call ai_omni_search first."
                             }
 
                 # --- HARD AUTH GATE ---
@@ -324,10 +379,7 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
 
                         # --- PREFERENCES & PERSONALIZATION ---
                         elif function_name == "remember_preference":
-                            res = await http_client.post(
-                                f"{API_BASE_URL}/recommendations/preferences/{user_id}",
-                                params=arguments
-                            )
+                            res = await http_client.post(f"{API_BASE_URL}/recommendations/preferences/{user_id}", params=arguments)
                             api_response_data = res.json()
                         elif function_name == "get_user_preferences":
                             res = await http_client.get(f"{API_BASE_URL}/recommendations/preferences/{user_id}")
@@ -336,27 +388,18 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             res = await http_client.get(f"{API_BASE_URL}/recommendations/personalized/{user_id}")
                             api_response_data = res.json()
                         elif function_name == "get_recently_discussed":
-                            res = await http_client.get(
-                                f"{API_BASE_URL}/recommendations/recent-context/{user_id}",
-                                params=arguments
-                            )
+                            res = await http_client.get(f"{API_BASE_URL}/recommendations/recent-context/{user_id}", params=arguments)
                             api_response_data = res.json()
 
                         # --- ORDERS ---
                         elif function_name == "check_order_status":
-                            res = await http_client.get(
-                                f"{API_BASE_URL}/orders/{arguments['orderId']}",
-                                params={"user_id": user_id}
-                            )
+                            res = await http_client.get(f"{API_BASE_URL}/orders/{arguments['orderId']}", params={"user_id": user_id})
                             api_response_data = res.json()
                         elif function_name == "get_user_orders":
                             res = await http_client.get(f"{API_BASE_URL}/orders/user/{user_id}")
                             api_response_data = res.json()
                         elif function_name == "get_order_items":
-                            res = await http_client.get(
-                                f"{API_BASE_URL}/orders/{arguments['orderId']}/items",
-                                params={"user_id": user_id}
-                            )
+                            res = await http_client.get(f"{API_BASE_URL}/orders/{arguments['orderId']}/items", params={"user_id": user_id})
                             api_response_data = res.json()
 
                         # --- SUPPORT TICKETS ---
@@ -368,29 +411,16 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             res = await http_client.post(f"{API_BASE_URL}/support-tickets/", json=payload)
                             api_response_data = res.json()
                         elif function_name == "check_ticket_status":
-                            res = await http_client.get(
-                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}",
-                                params={"user_id": user_id}
-                            )
+                            res = await http_client.get(f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}", params={"user_id": user_id})
                             api_response_data = res.json()
                         elif function_name == "add_ticket_comment":
-                            res = await http_client.post(
-                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/comments",
-                                json={"user_id": user_id, "comment": arguments["comment"]}
-                            )
+                            res = await http_client.post(f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/comments", json={"user_id": user_id, "comment": arguments["comment"]})
                             api_response_data = res.json()
                         elif function_name == "close_support_ticket":
-                            res = await http_client.patch(
-                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/close",
-                                params={"user_id": user_id}
-                            )
+                            res = await http_client.patch(f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/close", params={"user_id": user_id})
                             api_response_data = res.json()
                         elif function_name == "escalate_ticket":
-                            res = await http_client.patch(
-                                f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/escalate",
-                                params={"user_id": user_id},
-                                json={"reason": arguments["reason"]}
-                            )
+                            res = await http_client.patch(f"{API_BASE_URL}/support-tickets/{arguments['ticketId']}/escalate", params={"user_id": user_id}, json={"reason": arguments["reason"]})
                             api_response_data = res.json()
 
                         # --- STORE POLICY ---
@@ -398,17 +428,18 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             res = await http_client.get(f"{API_BASE_URL}/search/policy", params={"q": arguments["q"]})
                             api_response_data = res.json()
 
-                        # =========================================================================
-                        # ADDED: Admin dashboard tool dispatch
-                        # =========================================================================
+                        # --- CART ---
+                        elif function_name == "manage_cart":
+                            res = await http_client.post(f"{API_BASE_URL}/cart/manage", params={**arguments, "user_id": user_id})
+                            api_response_data = res.json()
+
+                        # --- ADMIN ---
                         elif function_name == "get_business_summary":
                             res = await http_client.get(f"{API_BASE_URL}/admin/summary", params=arguments)
                             api_response_data = res.json()
-
                         elif function_name == "get_sales_analytics":
                             res = await http_client.get(f"{API_BASE_URL}/admin/analytics", params=arguments)
                             api_response_data = res.json()
-
                         elif function_name == "get_top_selling_products":
                             res = await http_client.get(f"{API_BASE_URL}/admin/top-products", params=arguments)
                             api_response_data = res.json()
@@ -420,25 +451,38 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             api_response_data = res.json()
                         elif function_name == "resolve_product_name":
                             res = await http_client.get(f"{API_BASE_URL}/admin/resolve-product", params=arguments)
-                            api_response_data = res.json()    
+                            api_response_data = res.json()
                         elif function_name == "get_pending_tickets_summary":
                             res = await http_client.get(f"{API_BASE_URL}/admin/tickets-summary")
                             api_response_data = res.json()
                         elif function_name == "get_order_status_breakdown":
                             res = await http_client.get(f"{API_BASE_URL}/admin/order-status-breakdown", params=arguments)
                             api_response_data = res.json()
-                        # =========================================================================
+                        elif function_name == "natural_language_business_query":
+                            res = await http_client.get(f"{API_BASE_URL}/admin/business-query", params=arguments)
+                            api_response_data = res.json()
 
                     except Exception as e:
                         print(f"DEBUG {function_name} EXCEPTION: {type(e).__name__}: {e}")
                         api_response_data = {"error": str(e)}
 
-                # --- TOKEN PROTECTION SCRUBBER ---
-                api_response_data = _strip_embeddings(api_response_data)
+                
+                # --- TOKEN PROTECTION ---
+                if api_response_data is None:
+                    api_response_data = {"error": "Tool call produced no response"}
+                    api_response_data = _strip_embeddings(api_response_data)
 
                 # --- UPDATE PRODUCT REGISTRY ---
                 product_registry = _update_product_registry(product_registry, api_response_data)
 
+                # --- TRACK CART PRODUCT IDs from view results ---
+                if function_name == "manage_cart" and arguments.get("action") == "view":
+                    cart_product_ids = {}
+                    for item in api_response_data.get("items", []):
+                        cart_product_ids[item["product_id"]] = item.get("name", "")
+                    print(f"DEBUG cart_product_ids: {cart_product_ids}")
+
+                # --- Append tool result ---
                 working_memory.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -446,7 +490,17 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                     "content": json.dumps(api_response_data)
                 })
 
-    # Exhausted MAX_TOOL_ROUNDS — force synthesis
+                # --- Cart reminder ---
+                if function_name == "manage_cart":
+                    working_memory.append({
+                        "role": "system",
+                        "content": (
+                            "⚠️ The tool result above IS the real cart from the database. "
+                            "Show ONLY these items. Ignore any cart contents from earlier messages."
+                        )
+                    })
+
+    # Exhausted rounds — force synthesis
     print("🧠 Translating database JSON into natural language...")
 
     synthesis_reminder = {

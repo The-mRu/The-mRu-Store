@@ -38,7 +38,7 @@ order_items_collection = db['OrderItems']
 carts_collection = db['Carts']
 products_collection = db['Products']
 cart_items_collection = db['CartItems']
-
+brands_collection = db['Brands']
 
 
 
@@ -249,12 +249,12 @@ def cart_view(request):
         'products_json': json.dumps(product_dict)
     }
     return render(request, 'store/cart.html', context)
-
 def cart_sync_view(request):
     # Grab the current active user from the Django session profile
     user_id = request.session.get('user_id')
+    print(f"DEBUG cart_sync_view: user_id={user_id}")
     if not user_id:
-        return JsonResponse({'items': []}, status=200) # Silent fallback for anonymous guests
+        return JsonResponse({'items': []}, status=200)
 
     # Ensure a master Cart document exists for this user profile
     cart = carts_collection.find_one({"userId": user_id})
@@ -273,65 +273,92 @@ def cart_sync_view(request):
     # --- HANDLE GET REQUEST: Pull cart data from MongoDB to the browser ---
     if request.method == 'GET':
         db_items = list(cart_items_collection.find({"cartId": cart_id}))
+        print(f"DEBUG GET: cart_id={cart_id}, items={len(db_items)}")
         
-        # Format database rows to match local JavaScript properties
         formatted_items = [
             {"productId": item.get("productId"), "quantity": item.get("quantity", 1)}
             for item in db_items
         ]
         return JsonResponse({'items': formatted_items}, status=200)
 
-    # --- HANDLE POST REQUEST: Push browser storage states down to MongoDB ---
+    # --- HANDLE POST REQUEST: Merge browser cart with MongoDB ---
     elif request.method == 'POST':
         try:
             payload = json.loads(request.body)
             browser_items = payload.get('items', [])
 
-            # Clear older cached items to write the current cart batch fresh
-            cart_items_collection.delete_many({"cartId": cart_id})
-
-            total_amount = 0.0
+            # =========================================================================
+            # MERGE instead of DELETE — preserve items added by chatbot
+            # =========================================================================
+            
+            # Track which productIds the browser sent
+            browser_product_ids = set()
             
             for item in browser_items:
                 product_id = item.get('productId')
                 quantity = int(item.get('quantity', 1))
-                
-                # --- BULLETPROOF FIX: Check both "id" and "_id" ---
+                browser_product_ids.add(product_id)
+
+                if quantity <= 0:
+                    # Remove from MongoDB if quantity is 0
+                    cart_items_collection.delete_one({"cartId": cart_id, "productId": product_id})
+                    continue
+
+                # Resolve product price
                 query = [{"id": product_id}]
-                # If the JS sent a 24-character MongoDB ObjectId, add it to the search
                 if product_id and len(str(product_id)) == 24:
                     query.append({"_id": ObjectId(product_id)})
-                
                 product = products_collection.find_one({"$or": query})
-                # --------------------------------------------------
 
                 unit_price = float(product.get('price', 0)) if product else 0.0
                 total_price = unit_price * quantity
-                total_amount += total_price
 
-                cart_items_collection.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "cartId": cart_id,
-                    "productId": product_id,
-                    "variantId": None,
-                    "quantity": quantity,
-                    "unitPrice": unit_price,
-                    "totalPrice": total_price,
-                    "createdAt": datetime.utcnow()
-                })
+                # Upsert: update if exists, insert if new
+                existing = cart_items_collection.find_one({"cartId": cart_id, "productId": product_id})
+                if existing:
+                    cart_items_collection.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {
+                            "quantity": quantity,
+                            "unitPrice": unit_price,
+                            "totalPrice": total_price,
+                            "updatedAt": datetime.utcnow()
+                        }}
+                    )
+                else:
+                    cart_items_collection.insert_one({
+                        "cartId": cart_id,
+                        "productId": product_id,
+                        "name": product.get("name", "") if product else "",
+                        "quantity": quantity,
+                        "unitPrice": unit_price,
+                        "totalPrice": total_price,
+                        "createdAt": datetime.utcnow(),
+                        "updatedAt": datetime.utcnow()
+                    })
 
-            # Update the master Cart record with the new total sum
+            # Remove items that were in MongoDB but NOT in browser cart
+            # (user removed them in the browser, so delete from DB too)
+            all_db_items = list(cart_items_collection.find({"cartId": cart_id}))
+            for db_item in all_db_items:
+                if db_item["productId"] not in browser_product_ids:
+                    cart_items_collection.delete_one({"_id": db_item["_id"]})
+            # =========================================================================
+
+            # Recalculate total
+            remaining_items = list(cart_items_collection.find({"cartId": cart_id}))
+            total_amount = sum(item.get("totalPrice", 0) for item in remaining_items)
             carts_collection.update_one(
                 {"id": cart_id},
                 {"$set": {"totalAmount": total_amount, "updatedAt": datetime.utcnow()}}
             )
+            
             return JsonResponse({'status': 'synchronized'}, status=200)
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Method not allowed'}, status=405)
-
 
 def sync_cart_api(request):
     """Bridging view for frontend JavaScript to sync the cart."""
@@ -366,11 +393,9 @@ def sync_cart_api(request):
 
 
 
-# Initialize MongoDB Connection (You can also move this to settings.py)
-client = MongoClient('mongodb://localhost:27017/')
-db = client['amazon_clone_db']
-products_collection = db['Products']
-brands_collection = db['Brands']
+ 
+ 
+
 
 def search_view(request):
     # 1. Grab all the filter parameters from the URL

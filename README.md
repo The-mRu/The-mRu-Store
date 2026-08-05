@@ -26,6 +26,7 @@ Frontend: minimal storefront provided for manual testing and demoing chat flows 
 
 
 ## Architecture
+ User → Django Frontend → FastAPI Backend → MongoDB → AI Agent (OpenAI + sentence-transformers) → Response
 
 ![Project Architecture](project%20architecture.png)
 
@@ -40,7 +41,30 @@ Admin assistant
 - Permission-gated assistant for BI-style queries (revenue, best-sellers, stock alerts). Admin requests are validated server-side against the `Admins` collection.
 
 Note: tool dispatch and product-ID resolution are implemented in code (see `agent/orchestrator.py`) to reduce prompt brittleness.
+## Tool Inventory
 
+### Customer Tools (24)
+| Pillar | Tools |
+|--------|-------|
+| Product Discovery | `ai_omni_search`, `get_product_by_id`, `list_categories`, `list_brands`, `get_product_reviews` |
+| Recommendations | `recommend_products`, `compare_products`, `get_similar_products` |
+| Cart & Checkout | `manage_cart` |
+| Orders | `check_order_status`, `get_user_orders`, `get_order_items` |
+| Support Tickets | `create_support_ticket`, `check_ticket_status`, `add_ticket_comment`, `close_support_ticket`, `escalate_ticket`, `get_user_tickets` |
+| Personalization | `remember_preference`, `get_user_preferences`, `get_personalized_recommendations`, `get_recently_discussed` |
+| Store Policy | `search_store_policy` |
+
+### Admin Tools (8)
+| Category | Tools |
+|----------|-------|
+| Dashboard | `get_business_summary`, `get_sales_analytics` |
+| Products | `get_top_selling_products`, `get_product_performance` |
+| Inventory | `get_inventory_alerts` |
+| Orders | `get_order_status_breakdown` |
+| Tickets | `get_pending_tickets_summary` |
+| Business Queries | `natural_language_business_query` |
+
+**Total: 32 tools** across 6 pillars (Discovery, Cart, Orders, Support, Personalization, Admin).
 ## Quickstart — Chat-first (local)
 
 1. Clone and enter:
@@ -135,3 +159,10 @@ If you do not run the above, the assistant may operate in a limited/demo mode.
 - The AI assistants depend on document ingestion and vector embeddings for accurate answers.
 - Product-ID resolution and tool dispatch logic are handled in code (not just prompting) to keep the assistants reliable — see `agent/orchestrator.py`.
 - If local features are not working, verify that MongoDB and required environment variables are available.
+
+## Key Design Decisions
+
+- **Product-ID Registry**: The orchestrator maintains a server-side registry of every product ID mentioned in a conversation. Tool calls with fabricated IDs are intercepted and corrected before hitting the backend — no prompt-based guardrail needed.
+- **Multi-Round Tool Loop**: The agent can call tools, inspect responses, and call additional tools within the same turn (up to 4 rounds). This enables self-correction when a tool call fails or returns an unexpected result.
+- **Hybrid Search**: Combines keyword matching (field-weighted scoring) with semantic search (sentence-transformer embeddings) using Reciprocal Rank Fusion. Hard filters (brand, category, price) are applied before similarity scoring.
+- **Flexible Date Parsing**: Admin analytics accept natural language dates ("yesterday", "last month", "July 28, 2026") via a single `parse_date()` function used consistently across all admin endpoints.

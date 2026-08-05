@@ -74,7 +74,6 @@ def parse_date(date_str: str) -> datetime:
             continue
     
     raise ValueError(f"Could not parse date: '{date_str}'. Use YYYY-MM-DD, DD/MM/YYYY, or 'today'.")
-
 @router.get("/summary")
 async def get_business_summary(
     period: str = Query("today", description="today | yesterday | week"),
@@ -111,12 +110,21 @@ async def get_business_summary(
     revenue_result = await db.Orders.aggregate(revenue_pipeline).to_list(1)
     revenue = revenue_result[0]["total"] if revenue_result else 0
 
-    # new_customers = await db.Users.count_documents({"createdAt": {"$gte": start, "$lt": end}})
     new_customers = await db.Users.count_documents({"created_at": {"$gte": start, "$lt": end}})
-    
-    
 
-    # Only include current low stock for "today" — not meaningful for historical/future dates
+    # =========================================================================
+    # NEW: Count total units sold
+    # =========================================================================
+    units_pipeline = [
+        {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": start, "$lt": end}}},
+        {"$group": {"_id": None, "total_units": {"$sum": "$quantity"}}}
+    ]
+    units_result = await db.OrderItems.aggregate(units_pipeline).to_list(1)
+    total_units_sold = units_result[0]["total_units"] if units_result else 0
+    # =========================================================================
+
     is_today = (start.date() == now.date())
     low_stock = await db.Products.count_documents({"stock": {"$lte": 10}, "status": "active"}) if is_today else None
 
@@ -124,6 +132,7 @@ async def get_business_summary(
         "period_start": start.strftime("%Y-%m-%d"),
         "period_end": end.strftime("%Y-%m-%d"),
         "total_orders": total_orders,
+        "total_units_sold": total_units_sold,
         "revenue": round(revenue, 2),
         "new_customers": new_customers,
         "pending_orders": pending,
@@ -137,7 +146,6 @@ async def get_business_summary(
         result["low_stock_note"] = "Low stock data is only available for today's date."
 
     return result
-
 @router.get("/analytics")
 async def get_sales_analytics(compare: str = None):
     now = datetime.now(UTC)
@@ -345,7 +353,11 @@ async def get_product_performance(product_id: str = Query(...)):
         "current_stock": product.get("stock", 0),
         "rating": product.get("rating", 0.0),
         "total_reviews": product.get("totalReviews", 0),
-        "recent_review_comments": [r["comment"] for r in recent_reviews],
+        # "recent_review_comments": [r["comment"] for r in recent_reviews],
+        "recent_reviews": [
+            {"rating": r["rating"], "comment": r["comment"]}
+            for r in recent_reviews
+            ],
         "total_units_sold": sales.get("total_sold", 0),
         "total_revenue": round(sales.get("total_revenue", 0), 2),
         "first_sale_date": sales["first_sale"].strftime("%Y-%m-%d") if sales.get("first_sale") else None,
@@ -494,4 +506,113 @@ async def get_order_status_breakdown(
         "breakdown": breakdown,
         "stuck_processing_count": stuck_processing,
         "stuck_orders": stuck_orders,
+    }
+    
+@router.get("/business-query")
+async def natural_language_business_query(question: str):
+    """
+    Takes a natural language question and returns relevant data.
+    The LLM (orchestrator) interprets the question and this endpoint
+    provides the raw data for the LLM to synthesize an answer.
+    """
+    
+    # Common query patterns — the LLM picks which data to request
+    # based on the question. This endpoint returns ALL relevant data
+    # and lets the LLM filter/synthesize.
+    
+    now = datetime.now(UTC)
+    
+    # High-rated products with sales data
+    products = await db.Products.find(
+        {"status": "active"},
+        {"_id": 0, "id": 1, "name": 1, "rating": 1, "totalReviews": 1, "price": 1, "stock": 1, "category": 1}
+    ).to_list(200)
+    
+    # Sales data for all products (last 90 days)
+    sales_pipeline = [
+        {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": now - timedelta(days=90)}}},
+        {"$group": {
+            "_id": "$productId",
+            "total_sold": {"$sum": "$quantity"},
+            "total_revenue": {"$sum": "$totalPrice"}
+        }}
+    ]
+    sales_data = await db.OrderItems.aggregate(sales_pipeline).to_list(200)
+    sales_map = {s["_id"]: {"units": s["total_sold"], "revenue": s["total_revenue"]} for s in sales_data}
+    
+    # Merge product + sales
+    enriched = []
+    for p in products:
+        sales = sales_map.get(p["id"], {"units": 0, "revenue": 0})
+        enriched.append({
+            "id": p["id"],
+            "name": p["name"],
+            "rating": p.get("rating", 0),
+            "total_reviews": p.get("totalReviews", 0),
+            "price": p.get("price"),
+            "stock": p.get("stock", 0),
+            "category": p.get("category"),
+            "units_sold_90d": sales["units"],
+            "revenue_90d": sales["revenue"],
+        })
+    
+    # Category revenue breakdown
+    category_pipeline = [
+        {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": now - timedelta(days=90)}}},
+        {"$lookup": {"from": "Products", "localField": "productId", "foreignField": "id", "as": "product"}},
+        {"$unwind": "$product"},
+        {"$group": {
+            "_id": "$product.category",
+            "revenue": {"$sum": "$totalPrice"},
+            "units": {"$sum": "$quantity"}
+        }},
+        {"$sort": {"revenue": -1}}
+    ]
+    category_data = await db.OrderItems.aggregate(category_pipeline).to_list(50)
+    
+    # Top customers by spend (last 90 days)
+    customer_pipeline = [
+        {"$lookup": {"from": "Orders", "localField": "orderId", "foreignField": "id", "as": "order"}},
+        {"$unwind": "$order"},
+        {"$match": {"order.orderedAt": {"$gte": now - timedelta(days=90)}}},
+        {"$group": {
+            "_id": "$order.userId",
+            "total_spent": {"$sum": "$totalPrice"},
+            "order_count": {"$sum": 1}
+        }},
+        {"$sort": {"total_spent": -1}},
+        {"$limit": 20}
+    ]
+    
+    customer_data = await db.OrderItems.aggregate(customer_pipeline).to_list(20)
+    # Enrich with user names and emails
+    user_map = {}
+    user_ids = [c["_id"] for c in customer_data if c.get("_id")]
+    if user_ids:
+        users = await db.Users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1}
+        ).to_list(len(user_ids))
+        user_map = {u["id"]: u for u in users}
+    
+    top_customers = []
+    for c in customer_data:
+        user = user_map.get(c["_id"], {})
+        top_customers.append({
+            "user_id": c["_id"],
+            "name": user.get("name", "Unknown"),
+            "email": user.get("email", "No email"),
+            "total_spent": round(c["total_spent"], 2),
+            "orders": c["order_count"],
+        })
+    
+    return {
+        "question": question,
+        "products": enriched,
+        "category_revenue": category_data,
+        "top_customers": top_customers,
     }

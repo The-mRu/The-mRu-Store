@@ -5,10 +5,6 @@
 <div class="py-12 px-4 max-w-[1200px] mx-auto transition-colors duration-300">
     <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white mb-8">Shopping Cart</h1>
 
-    <!-- 
-        This securely loads the product dictionary from Django 
-        into a hidden script tag so our JavaScript can read it.
-    -->
     <script id="product-data" type="application/json">
         {{ products_json|safe }}
     </script>
@@ -18,7 +14,6 @@
         <!-- Left Column: Cart Items -->
         <div class="flex-grow bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 transition-all">
             <div id="cart-items-container" class="flex flex-col gap-8">
-                <!-- Items will be injected here by JavaScript -->
             </div>
         </div>
 
@@ -32,7 +27,6 @@
                     <span id="summary-total" class="font-bold text-2xl text-gray-900 dark:text-white">৳0.00</span>
                 </div>
                 
-                <!-- Fixed Checkout Link -->
                 <a href="{% url 'checkout' %}" class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3 rounded-xl shadow-md transition-all transform hover:-translate-y-0.5 mb-4">
                     Proceed to checkout
                 </a>
@@ -47,7 +41,35 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    // =========================================================================
+    // Sync cart from MongoDB into localStorage on page load
+    // =========================================================================
+    async function loadCartFromDB() {
+        try {
+            const response = await fetch("{% url 'cart_sync_view' %}");
+            if (response.ok) {
+                const data = await response.json();
+                if (data.items && data.items.length > 0) {
+                    const dbCart = data.items.map(item => ({
+                        productId: item.productId,
+                        quantity: item.quantity
+                    }));
+                    localStorage.setItem('mRuCart', JSON.stringify(dbCart));
+                    window.localCart = dbCart;
+                }
+            }
+        } catch (e) {
+            console.log('Could not sync cart from server:', e);
+        }
+    }
+    // =========================================================================
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        // =========================================================================
+        // Load cart from MongoDB first, then render
+        // =========================================================================
+        await loadCartFromDB();
+        // =========================================================================
         renderCart();
     });
 
@@ -56,12 +78,10 @@
         const summaryCount = document.getElementById('summary-count');
         const summaryTotal = document.getElementById('summary-total');
         
-        // Grab the cart from localStorage and the product data from Django
         let cart = JSON.parse(localStorage.getItem('mRuCart')) || [];
         const productDataRaw = document.getElementById('product-data').textContent;
         const products = JSON.parse(productDataRaw);
 
-        // Premium Empty Cart State
         if (cart.length === 0) {
             container.innerHTML = `
                 <div class="text-center py-16">
@@ -84,10 +104,9 @@
         let totalItems = 0;
         let totalPrice = 0;
 
-        cart.forEach((item, index) => {
+        cart.forEach((item) => {
             const product = products[item.productId];
             
-            // If the product still exists in the database
             if (product) {
                 totalItems += item.quantity;
                 totalPrice += (parseFloat(product.price) * item.quantity);
@@ -95,7 +114,6 @@
                 html += `
                     <div class="flex flex-col sm:flex-row gap-6 border-b border-gray-100 dark:border-gray-700 pb-8 last:border-0 last:pb-0">
                         
-                        <!-- Product Image OR Placeholder -->
                         <div class="w-full sm:w-32 h-40 sm:h-32 bg-gray-50 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center rounded-xl overflow-hidden group">
                             ${product.image ? 
                                 `<img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-300">` 
@@ -104,7 +122,6 @@
                             }
                         </div>
                         
-                        <!-- Product Details -->
                         <div class="flex-grow flex flex-col justify-between">
                             <div>
                                 <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-2">
@@ -119,7 +136,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Controls -->
                             <div class="flex items-center gap-6 mt-auto">
                                 <div class="flex items-center border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 shadow-sm">
                                     <button onclick="updateQuantity('${item.productId}', -1)" class="w-10 h-9 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium transition-colors">-</button>
@@ -144,41 +160,28 @@
     }
 
     function updateQuantity(productId, change) {
-        // 1. Force both to Strings to avoid strict equality bugs
         const item = localCart.find(i => String(i.productId) === String(productId));
         
         if (item) {
             item.quantity += change;
             if (item.quantity <= 0) {
-                // If it hits 0, remove it from the global array
                 localCart = localCart.filter(i => String(i.productId) !== String(productId));
             }
             
-            // 2. Save to browser memory
             localStorage.setItem('mRuCart', JSON.stringify(localCart));
-            
-            // 3. Update the UI
             renderCart(); 
             updateCartBadge(); 
-            
-            // 4. Instantly sync this new change to the MongoDB database!
             if (typeof pushCartToDB === 'function') pushCartToDB();
         }
     }
 
     function removeFromCart(productId) {
-        // 1. Filter it out of the GLOBAL localCart using strict String coercion
         localCart = localCart.filter(i => String(i.productId) !== String(productId));
-        
-        // 2. Save to browser memory
         localStorage.setItem('mRuCart', JSON.stringify(localCart));
-        
-        // 3. Update the UI
         renderCart(); 
         updateCartBadge(); 
-        
-        // 4. Instantly sync this deletion to the MongoDB database!
         if (typeof pushCartToDB === 'function') pushCartToDB();
     }
+    
 </script>
 {% endblock %}

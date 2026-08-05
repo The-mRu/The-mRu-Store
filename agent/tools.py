@@ -33,7 +33,15 @@ ecommerce_tools = [
                     "max_price": {
                         "type": "number",
                         "description": "Maximum price constraint."
-                    }
+                    },
+                    "limit": {
+    "type": "integer",
+    "description": "Max products to show. Default 10. Use higher values when user asks for 'more' or 'all'."
+},
+"offset": {
+    "type": "integer",
+    "description": "Skip first N products. For 'show more', set offset = previous offset + previous limit."
+}
                 }
             }
         }
@@ -366,4 +374,31 @@ ecommerce_tools = [
         }
     }
     },
+    ### Cart Management Function
+    {
+    "type": "function",
+    "function": {
+        "name": "manage_cart",
+        "description": "Manage the user's shopping cart. Use 'add' to add items, 'view' to see cart contents, 'update' to change quantity (0 to remove), The chatbot cannot place orders — direct users to the checkout page for that.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["add", "view", "update"],
+                    "description": "What to do: 'add' a product, 'view' the cart, 'update' quantity"
+                },
+                "product_id": {
+                    "type": "string",
+                    "description": "Required for 'add' and 'update' actions."
+                },
+                "quantity": {
+                    "type": "integer",
+                    "description": "Required for 'add' and 'update'. Set to 0 to remove item."
+                }
+            },
+            "required": ["action"]
+        }
+    }
+}
 ]

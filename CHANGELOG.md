@@ -1,3 +1,43 @@
+##### August 5, 2026
+## Cart & Search Stability
+
+### Fixed
+- Cart add/remove using wrong product IDs — orchestrator now validates against actual cart contents before API call
+- LLM showing stale cart from memory instead of real database state — post-tool reminder forces fresh data
+- `BadRequestError` from missing tool responses — safety fallback guarantees every tool_call gets appended
+- Checkout disabled in chatbot — directs users to `/checkout/` for address/payment
+- Search missing products (saree, chiffon) — regex now searches name, category, description alongside $text
+- Lexical search rewritten: $text + regex merged into one scored list before RRF ranking
+- Vector search pool now includes lexical matches, not just random 300 products
+
+### Added
+- `cart_product_ids` tracking in orchestrator — persists across conversation rounds
+- Safety fallback: `api_response_data` never `None` before tool response append
+
+### Changed
+- Cart prompt rules consolidated: add/view/update/remove/checkout with explicit disambiguation
+- `manage_cart` added to `PRODUCT_ID_TOOLS` and `AUTH_REQUIRED_TOOLS`
+- 10 inactive saree products activated in database
+
+## Summary
+Complete test suite for cart management API endpoints
+
+## Changes
+- ✅ 8 passing tests (100% pass rate)
+- 🔧 Fixed response format handling
+- 🗄️ Using real database products for testing
+- 🧹 Automatic test data cleanup
+
+## Test Coverage
+- [x] Add to cart
+- [x] View cart
+- [x] Update quantity
+- [x] Remove items
+- [x] Empty cart
+- [x] Invalid products
+- [x] Multiple products
+- [x] Checkout disabled
+
 ##### August 4, 2026
 
 ### Admin Dashboard - Phase 2

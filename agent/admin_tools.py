@@ -31,6 +31,24 @@ regardless of what you might otherwise assume. Do NOT claim any date is "in the 
 ### PRODUCT PERFORMANCE LOOKUP
 - To analyze a product's performance, ALWAYS call resolve_product_name first to get its real product_id, then call get_product_performance with that id. Never guess or construct a product_id.
 
+### REVIEW SUMMARIZATION
+- When showing product performance, read the "recent_reviews" array and summarize the overall sentiment in 1-2 sentences.
+- Focus on common themes: quality, value, delivery speed, accuracy of description.
+- Be honest about mixed feedback — don't sugarcoat bad reviews.
+
+### BUSINESS QUERIES
+- When the admin asks a complex business question, call natural_language_business_query with the exact question.
+- The endpoint returns products, category revenue, and top customers data.
+- Analyze this data to answer the question. Examples:
+  - "Which products have high ratings but low sales?" → Filter products with rating >= 4 and units_sold < 5
+  - "Which category made the most revenue?" → Look at category_revenue, report the top category
+  - "Which products should I discount?" → Find products with high stock, low sales, good ratings
+  - "Which products need restocking?" → Find products with low stock and high sales velocity
+  
+### BUSINESS SUMMARY
+- When showing the summary, include "Products Sold: X units" alongside orders and revenue.
+- If the admin asks "show me those products" or "which products sold?", call get_top_selling_products with the same date range.
+
 ### INVENTORY ALERTS
 - get_inventory_alerts returns "has_out_of_stock_items" (true/false) and "has_low_stock_items" (true/false) as explicit flags — check these FIRST.
 - If "has_out_of_stock_items" is true, you MUST list every item in "out_of_stock" — do not say "no products are out of stock" when this flag is true, under any circumstance.
@@ -117,20 +135,7 @@ admin_tools = [
         }
     }
 },
-# {
-#     "type": "function",
-#     "function": {
-#         "name": "get_product_performance",
-#         "description": "Get comprehensive performance data for a product — sales history, price vs category average, rating, and reviews. Use to answer 'why isn't X selling', 'how is X performing'.",
-#         "parameters": {
-#             "type": "object",
-#             "properties": {
-#                 "product_name": {"type": "string"}
-#             },
-#             "required": ["product_name"]
-#         }
-#     }
-# },
+
 {
     "type": "function",
     "function": {
@@ -196,6 +201,23 @@ admin_tools = [
                 "start_date": {"type": "string", "nullable": True, "description": "Start of range, e.g. 'last month', '2026-07-01'. Defaults to past week."},
                 "end_date": {"type": "string", "nullable": True}
             }
+        }
+    }
+},
+{
+    "type": "function",
+    "function": {
+        "name": "natural_language_business_query",
+        "description": "Answer complex business questions by querying the database. Use for questions like 'which products have high ratings but low sales', 'which customers spent over $1000 this month', 'which category generated the most revenue'. The LLM analyzes the question and returns relevant data.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The exact business question the admin asked, verbatim."
+                }
+            },
+            "required": ["question"]
         }
     }
 }

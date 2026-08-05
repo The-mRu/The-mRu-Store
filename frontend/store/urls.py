@@ -1,3 +1,4 @@
+#frontend/store/urls.py
 from django.urls import path
 from . import views
 
@@ -22,6 +23,7 @@ urlpatterns = [
     
     # API Routes (Kept the correct ones, removed duplicates)
     path('api/cart/sync/', views.sync_cart_api, name='sync_cart_api'), 
+    path('cart/sync/', views.cart_sync_view, name='cart_sync_view'),
     path('api/orders/place/', views.place_order_api, name='place_order_api'),
     
     # Dashboard Routes

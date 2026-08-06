@@ -206,88 +206,6 @@ async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
 
     return final_ranked_list[:50]
 
-# async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
-#     hard_filter = {"status": "active"}
-
-#     if gender:
-#         hard_filter["gender"] = {"$in": [gender.lower(), "unisex"]}
-
-#     if category:
-#         cat_id = await resolve_category_id(category)
-#         if cat_id:
-#             hard_filter["categoryId"] = cat_id
-#         else:
-#             return []
-
-#     if brand:
-#         brand_id = await resolve_brand_id(brand)
-#         if brand_id:
-#             hard_filter["brandId"] = brand_id
-#         else:
-#             return []
-
-#     if min_price is not None or max_price is not None:
-#         hard_filter["price"] = {}
-#         if min_price is not None:
-#             hard_filter["price"]["$gte"] = min_price
-#         if max_price is not None:
-#             hard_filter["price"]["$lte"] = max_price
-
-#     DEFAULT_THUMBNAIL = "/static/images/placeholder.png"
-
-#     def _apply_defaults(product):
-#         product.setdefault("thumbnail", DEFAULT_THUMBNAIL)
-#         if not product.get("thumbnail"):
-#             product["thumbnail"] = DEFAULT_THUMBNAIL
-#         product.setdefault("discountPrice", None)
-#         product.setdefault("rating", 0.0)
-#         return product
-
-#     if not q:
-#         filter_only_results = await db.Products.find(hard_filter).limit(20).to_list(20)
-#         if not filter_only_results:
-#             return []
-#         for product in filter_only_results:
-#             product.pop("embedding", None)
-#             product["_id"] = str(product["_id"])
-#             _apply_defaults(product)
-#         return filter_only_results[:20]
-
-#     text_results = []
-#     text_query = {**hard_filter, "$text": {"$search": q}}
-#     text_cursor = db.Products.find(text_query, {"score": {"$meta": "textScore"}})
-#     text_cursor = text_cursor.sort([("score", {"$meta": "textScore"})]).limit(50)
-#     text_results = await text_cursor.to_list(length=50)
-
-#     query_vector = embedding_model.encode(q).tolist()
-#     candidate_docs = await db.Products.find(hard_filter).to_list(length=300)
-#     scored_docs = []
-
-#     for doc in candidate_docs:
-#         vec = doc.get("embedding")
-#         if not vec:
-#             continue
-#         score = calculate_similarity(query_vector, vec)
-#         if score > 0.25:
-#             doc["vectorScore"] = score
-#             scored_docs.append(doc)
-
-#     scored_docs.sort(key=lambda x: x["vectorScore"], reverse=True)
-#     vector_results = scored_docs[:50]
-
-#     if not text_results and not vector_results:
-#         return []
-
-#     final_ranked_list = rerank_rrf(vector_results, text_results)
-
-#     for product in final_ranked_list:
-#         _apply_defaults(product)
-
-#     return final_ranked_list[:20]
-
-
-
-
 async def search_products_core(
     q: Optional[str] = None,
     category: Optional[str] = None,
@@ -323,25 +241,6 @@ async def search_products_core(
             return {"products": results, "relaxed": relaxed_applied}
 
     return {"products": [], "relaxed": relaxed_applied}
-
-
-# @router.get("/")
-# async def ai_omni_search(
-#     q: Optional[str] = Query(None),
-#     category: Optional[str] = Query(None),
-#     gender: Optional[str] = Query(None),
-#     brand: Optional[str] = Query(None),
-#     min_price: Optional[float] = Query(None),
-#     max_price: Optional[float] = Query(None),
-# ):
-#     result = await search_products_core(
-#         q=q, category=category, gender=gender, brand=brand,
-#         min_price=min_price, max_price=max_price
-#     )
-#     if not result["products"]:
-#         raise HTTPException(status_code=404, detail="No products found matching these criteria.")
-#     return result
-
 
 @router.get("/")
 async def ai_omni_search(

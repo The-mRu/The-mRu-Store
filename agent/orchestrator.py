@@ -1,4 +1,5 @@
 # agent/orchestrator.py
+from datetime import UTC, datetime
 import os
 import json
 import httpx
@@ -7,6 +8,7 @@ from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from agent.tools import ecommerce_tools
 from agent.admin_tools import admin_tools, get_admin_system_prompt
+from backend.db.database import db
 
 load_dotenv()
 
@@ -19,6 +21,20 @@ if not api_key:
 # Initialize the client securely
 client = AsyncOpenAI(api_key=api_key)
 
+
+
+async def _log_agent_event(event_type: str, data: dict):
+    """Log every tool call and final response for offline evaluation."""
+    try:
+        from backend.db.database import db
+        from datetime import datetime, UTC
+        await db.AgentLogs.insert_one({
+            "event_type": event_type,
+            "timestamp": datetime.now(UTC),
+            **data
+        })
+    except Exception:
+        pass  # Never break the chat flow for logging
 
 def _strip_embeddings(data):
     """Recursively remove any 'embedding' key, at any nesting depth."""
@@ -257,8 +273,23 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
         ai_message = response.choices[0].message
         working_memory.append(ai_message)
 
+        # if not ai_message.tool_calls:
+        #     message_history.append({"role": "assistant", "content": ai_message.content})
+        #     return ai_message.content
+        
         if not ai_message.tool_calls:
             message_history.append({"role": "assistant", "content": ai_message.content})
+            try:
+                await db.AgentLogs.insert_one({
+            "event_type": "final_response",
+            "timestamp": datetime.now(UTC),
+            "user_id": user_id,
+            "user_message": user_message,
+            "final_text": ai_message.content[:500] if ai_message.content else "",
+            "tools_used": [],
+        })
+            except Exception as e:
+                print(f"DEBUG LOGGING ERROR (early return): {e}")
             return ai_message.content
 
         AUTH_REQUIRED_TOOLS = {
@@ -471,6 +502,17 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                 if api_response_data is None:
                     api_response_data = {"error": "Tool call produced no response"}
                     api_response_data = _strip_embeddings(api_response_data)
+                    
+                # --- LOG TOOL CALL ---
+                await _log_agent_event("tool_call", {
+                    "user_id": user_id,
+                    "tool_name": function_name,
+                    "arguments": arguments,
+                    "success": api_response_data is not None and "error" not in str(api_response_data),
+                    "response_keys": list(api_response_data.keys()) if isinstance(api_response_data, dict) else [],
+                    "response_snippet": str(api_response_data)[:2000], 
+                    }
+                                    )
 
                 # --- UPDATE PRODUCT REGISTRY ---
                 product_registry = _update_product_registry(product_registry, api_response_data)
@@ -520,4 +562,27 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
 
     final_text = final_response.choices[0].message.content
     message_history.append({"role": "assistant", "content": final_text})
+
+
+    # --- LOG FINAL RESPONSE ---
+    # Collect tool names and raw results from this turn
+
+    try:
+        tool_names = []
+        if ai_message.tool_calls:
+            tool_names = [tc.function.name for tc in ai_message.tool_calls]
+    
+        await db.AgentLogs.insert_one({
+        "event_type": "final_response",
+        "timestamp": datetime.now(UTC),
+        "user_id": user_id,
+        "user_message": user_message,
+        "final_text": final_text[:500],
+        "tools_used": tool_names,
+    })
+    except Exception as e:
+        print(f"DEBUG: Logging failed: {e}")
+    
     return final_text
+    
+    

@@ -252,7 +252,7 @@ def cart_view(request):
 def cart_sync_view(request):
     # Grab the current active user from the Django session profile
     user_id = request.session.get('user_id')
-    print(f"DEBUG cart_sync_view: user_id={user_id}")
+    # print(f"DEBUG cart_sync_view: user_id={user_id}")
     if not user_id:
         return JsonResponse({'items': []}, status=200)
 
@@ -273,7 +273,7 @@ def cart_sync_view(request):
     # --- HANDLE GET REQUEST: Pull cart data from MongoDB to the browser ---
     if request.method == 'GET':
         db_items = list(cart_items_collection.find({"cartId": cart_id}))
-        print(f"DEBUG GET: cart_id={cart_id}, items={len(db_items)}")
+        # print(f"DEBUG GET: cart_id={cart_id}, items={len(db_items)}")
         
         formatted_items = [
             {"productId": item.get("productId"), "quantity": item.get("quantity", 1)}
@@ -588,7 +588,7 @@ def place_order_view(request):
         return JsonResponse({'status': 'success', 'orderNumber': order_number}, status=200)
         
     except Exception as e:
-        print(f"Database error executing order batch: {str(e)}")
+        # print(f"Database error executing order batch: {str(e)}")
         return JsonResponse({'error': 'Internal server pipeline failure'}, status=500)
 
 def place_order_api(request):

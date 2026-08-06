@@ -174,24 +174,45 @@ async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
     # --- Unified lexical search (fixes Problems 1-4) ---
     lexical_results = await _lexical_search(hard_filter, q, limit=50)
 
-    # --- Vector search — pool now GUARANTEES lexical matches are included,
-    #     not just a random 300 (fixes Problem 5) ---
-    lexical_ids = [d["_id"] for d in lexical_results]
-    random_sample = await db.Products.find(
-        {**hard_filter, "_id": {"$nin": lexical_ids}}
-    ).limit(250).to_list(250)
-    candidate_docs = lexical_results + random_sample
-
+    # --- Vector search ---
+    # Embedding similarity on short, templated product names doesn't reliably
+    # separate real matches from noise (confirmed via diagnostic: unrelated
+    # products like monitors/coffee makers scored HIGHER than genuinely
+    # relevant ones for the same query — no threshold fixes this). So vector
+    # search is only used in two safe ways:
+    #   1. To re-score docs lexical search already found (helps RRF order
+    #      the best fit among known-relevant results).
+    #   2. As a fallback over a wider, unvetted pool ONLY when lexical search
+    #      found few/no results — same "relax only when needed" principle
+    #      already used in search_products_core's relaxation logic.
     query_vector = embedding_model.encode(q).tolist()
+
     scored_docs = []
-    for doc in candidate_docs:
+    for doc in lexical_results:
         vec = doc.get("embedding")
         if not vec:
             continue
         score = calculate_similarity(query_vector, vec)
-        if score > 0.25:
-            doc["vectorScore"] = score
-            scored_docs.append(doc)
+        doc["vectorScore"] = score
+        scored_docs.append(doc)
+
+    LEXICAL_WEAK_THRESHOLD = 5  # below this, lexical search is considered "thin"
+    RANDOM_POOL_MIN_SCORE = 0.6  # high bar — this pool is unfiltered/unvetted
+
+    if len(lexical_results) < LEXICAL_WEAK_THRESHOLD:
+        lexical_ids = [d["_id"] for d in lexical_results]
+        random_sample = await db.Products.find(
+            {**hard_filter, "_id": {"$nin": lexical_ids}}
+        ).limit(250).to_list(250)
+
+        for doc in random_sample:
+            vec = doc.get("embedding")
+            if not vec:
+                continue
+            score = calculate_similarity(query_vector, vec)
+            if score > RANDOM_POOL_MIN_SCORE:
+                doc["vectorScore"] = score
+                scored_docs.append(doc)
 
     scored_docs.sort(key=lambda x: x["vectorScore"], reverse=True)
     vector_results = scored_docs[:100]

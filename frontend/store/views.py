@@ -31,7 +31,10 @@ from .forms import CustomRegistrationForm
 
 
 # Initialize MongoDB Connection
-client = MongoClient('mongodb://localhost:27017/')
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+client = MongoClient(MONGO_URI)
+
 db = client['amazon_clone_db']
 orders_collection = db['Orders']
 order_items_collection = db['OrderItems']

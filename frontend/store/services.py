@@ -1,8 +1,9 @@
 import requests
 import logging
+import os
 
 # Point this to your FastAPI server
-FASTAPI_BASE_URL = "http://127.0.0.1:8000"
+FASTAPI_BASE_URL = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
 logger = logging.getLogger(__name__)
 
 def get_all_products():

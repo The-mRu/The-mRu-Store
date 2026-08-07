@@ -1,6 +1,12 @@
 # backend/api/ml_core.py
-from sentence_transformers import SentenceTransformer
+import os
+from functools import lru_cache
 
-print("Loading AI Embedding Model (Singleton)...")
-# Initialize the model exactly once here
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+@lru_cache(maxsize=1)
+def get_embedding_model():
+	"""Load the sentence-transformer model on first use only."""
+	from sentence_transformers import SentenceTransformer
+
+	model_name = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+	return SentenceTransformer(model_name)

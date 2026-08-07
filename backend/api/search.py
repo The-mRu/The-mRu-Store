@@ -5,12 +5,9 @@ from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from backend.db.database import db
-from sentence_transformers import SentenceTransformer
+from backend.api.ml_core import get_embedding_model
 
 router = APIRouter()
-
-print("Loading AI Search Model...")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 def calculate_similarity(v1, v2):
@@ -185,6 +182,7 @@ async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
     #   2. As a fallback over a wider, unvetted pool ONLY when lexical search
     #      found few/no results — same "relax only when needed" principle
     #      already used in search_products_core's relaxation logic.
+    embedding_model = get_embedding_model()
     query_vector = embedding_model.encode(q).tolist()
 
     scored_docs = []
@@ -324,6 +322,7 @@ async def advanced_search(
 
 @router.get("/policy")
 async def search_store_policy(q: str = Query(..., description="The policy question")):
+    embedding_model = get_embedding_model()
     query_vector = embedding_model.encode(q).tolist()
     cursor = db.StoreKnowledge.find()
     results = []

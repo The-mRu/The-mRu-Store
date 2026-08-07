@@ -6,10 +6,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 from backend.db.database import db
-from sentence_transformers import SentenceTransformer
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
-from backend.api.ml_core import embedding_model
+from backend.api.ml_core import get_embedding_model
 
 router = APIRouter()
 
@@ -150,7 +149,7 @@ async def create_product(payload: ProductWrite):
         payload.name, category_name, payload.gender, payload.description, brand_name,
         warranty=payload.warranty, rating=None 
         )
-    embedding = embedding_model.encode(search_text).tolist()
+    embedding = get_embedding_model().encode(search_text).tolist()
 
     product = {
         "id": f"prod_custom_{uuid.uuid4().hex[:6]}",
@@ -194,7 +193,7 @@ async def update_product(product_id: str, payload: ProductWrite):
             payload.name, category_name, payload.gender, payload.description, brand_name,
             warranty=payload.warranty, rating=None 
             ) 
-    embedding = embedding_model.encode(search_text).tolist()
+    embedding = get_embedding_model().encode(search_text).tolist()
 
     update_data = {
         "name": payload.name,

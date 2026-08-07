@@ -9,7 +9,7 @@ local = MongoClient("mongodb://localhost:27017")
 local_db = local["amazon_clone_db"]
 
 # Target: your Atlas DB
-ATLAS_URI = "mongodb+srv://fsrrayhan_db_user:1K4VAjaBLS13DjVo@cluster0.obiwgd4.mongodb.net/"
+ATLAS_URI = "LINK_TO_YOUR_ATLAS_CLUSTER"  # Replace with your Atlas connection string
 atlas = MongoClient(ATLAS_URI, tlsCAFile=certifi.where())
 
 atlas_db = atlas["amazon_clone_db"]

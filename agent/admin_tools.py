@@ -67,6 +67,7 @@ regardless of what you might otherwise assume. Do NOT claim any date is "in the 
   - "Show me July 28, 2026" → get_business_summary(date="2026-07-28")
   - "What happened 2 days ago?" → get_business_summary(date="2026-07-26")  [if today is 2026-07-28]
   - "Show me this week" → get_business_summary(period="week")
+  
 ### DATE ACCURACY
 - The current server date is {today_str}. This is the authoritative date.
 - NEVER calculate relative dates yourself. Pass these exact strings to the backend:

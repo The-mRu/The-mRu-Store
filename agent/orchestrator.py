@@ -273,10 +273,6 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
         ai_message = response.choices[0].message
         working_memory.append(ai_message)
 
-        # if not ai_message.tool_calls:
-        #     message_history.append({"role": "assistant", "content": ai_message.content})
-        #     return ai_message.content
-        
         if not ai_message.tool_calls:
             message_history.append({"role": "assistant", "content": ai_message.content})
             try:
@@ -319,16 +315,6 @@ async def run_agent(user_message: str, message_history: list, user_id: str = Non
                             "error": "product_id not in cart",
                             "message": f"'{pid}' is not in your cart. Valid IDs: {list(cart_product_ids.keys())}",
                         }
-                        ### Skip the API call — append and continue
-                        # api_response_data = _strip_embeddings(api_response_data)
-                        # working_memory.append({
-                        #     "role": "tool",
-                        #     "tool_call_id": tool_call.id,
-                        #     "name": function_name,
-                        #     "content": json.dumps(api_response_data)
-                        # })
-                        # continue
-                # =========================================================================
 
                 # --- PRODUCT ID VALIDATION ---
                 if function_name in PRODUCT_ID_TOOLS:

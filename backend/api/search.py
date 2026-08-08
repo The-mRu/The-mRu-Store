@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from backend.db.database import db
-from backend.api.ml_core import get_embedding_model
+from backend.api.ml_core import get_embedding
 
 router = APIRouter()
 
@@ -182,8 +182,7 @@ async def _run_search(q, category, gender, brand, min_price, max_price) -> list:
     #   2. As a fallback over a wider, unvetted pool ONLY when lexical search
     #      found few/no results — same "relax only when needed" principle
     #      already used in search_products_core's relaxation logic.
-    embedding_model = get_embedding_model()
-    query_vector = embedding_model.encode(q).tolist()
+    query_vector = await get_embedding(q)
 
     scored_docs = []
     for doc in lexical_results:
@@ -322,8 +321,7 @@ async def advanced_search(
 
 @router.get("/policy")
 async def search_store_policy(q: str = Query(..., description="The policy question")):
-    embedding_model = get_embedding_model()
-    query_vector = embedding_model.encode(q).tolist()
+    query_vector = await get_embedding(q)
     cursor = db.StoreKnowledge.find()
     results = []
     async for doc in cursor:

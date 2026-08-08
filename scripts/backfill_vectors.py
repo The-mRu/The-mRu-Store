@@ -1,13 +1,18 @@
 # scripts/backfill_vectors.py
 import argparse
+import os
 import pymongo
-from sentence_transformers import SentenceTransformer
+from openai import OpenAI
 
 client = pymongo.MongoClient("mongodb://localhost:27017")
 db = client["amazon_clone_db"]
 
-print("Loading Embedding Model...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
+api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY")
+if not api_key:
+    raise RuntimeError("OPENAI_API_KEY is missing. Set it before running this script.")
+
+client_openai = OpenAI(api_key=api_key)
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-small")
 
 
 def build_search_text(name, cat_name, gender, brand_name, warranty, rating, tags, desc):
@@ -46,7 +51,7 @@ def backfill_products(force=False):
             brand_name = brand_doc["name"] if brand_doc else None
 
         search_text = build_search_text(name, cat_name, gender, brand_name, warranty, rating, tags, desc)
-        embedding = model.encode(search_text).tolist()
+        embedding = client_openai.embeddings.create(model=EMBEDDING_MODEL_NAME, input=search_text).data[0].embedding
 
         db.Products.update_one(
             {"_id": product["_id"]},

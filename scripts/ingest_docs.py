@@ -2,7 +2,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
-from sentence_transformers import SentenceTransformer
+from openai import AsyncOpenAI
 from pypdf import PdfReader
 import docx
 
@@ -14,8 +14,12 @@ MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "amazon_clone_db")
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client[MONGO_DB_NAME]
 
-print("Loading AI Model...")
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_ADMIN_KEY")
+if not api_key:
+    raise RuntimeError("OPENAI_API_KEY is missing. Set it before running this script.")
+
+embedding_client = AsyncOpenAI(api_key=api_key)
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "text-embedding-3-small")
 
 def extract_text_from_pdf(file_path):
     """Extracts text from a PDF file."""
@@ -66,7 +70,7 @@ async def process_document(file_path, source_name):
     # Translate and save each paragraph
     count = 0
     for chunk in valid_chunks:
-        vector = embedding_model.encode(chunk).tolist()
+        vector = (await embedding_client.embeddings.create(model=EMBEDDING_MODEL_NAME, input=chunk)).data[0].embedding
         doc_record = {
             "source": source_name,
             "content": chunk,

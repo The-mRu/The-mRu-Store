@@ -10,6 +10,8 @@ User or admin interface -> Django frontend -> FastAPI API -> MongoDB -> AI agent
 
 The FastAPI app is the primary application backend. It exposes domain routers for products, categories, search, cart, orders, reviews, support tickets, recommendations, preferences, users, auth, analytics, and chat. The chat route hands off to the agent orchestrator, which decides what tools to call and how to turn the results into a response.
 
+Embeddings are now generated through the OpenAI API instead of a local sentence-transformer model. That keeps the web service lighter for platforms like Northflank and avoids loading PyTorch into the request process.
+
 The Django app provides the storefront, account pages, admin screens, and proxy endpoints that forward requests to the FastAPI backend. It is the user-facing web layer for browsing and manual testing.
 
 MongoDB is the main data store. The shared database namespace is `amazon_clone_db`, and it is accessed from both the async FastAPI layer and the Django frontend helpers.
@@ -248,6 +250,7 @@ pip install -r requirements.txt
 - `OPENAI_API_KEY`
 - `MONGO_URI`
 - `MONGO_DB_NAME`
+- `EMBEDDING_MODEL_NAME` optional, defaults to `text-embedding-3-small`
 
 5. Start the FastAPI backend:
 
@@ -274,6 +277,8 @@ python scripts/ingest_docs.py
 ```
 
 If you skip these scripts, the app can still run, but chat quality and search coverage may be limited.
+
+The embedding scripts now use OpenAI embeddings too, so they no longer require the local `sentence-transformers` / `torch` stack.
 
 ## Notes
 

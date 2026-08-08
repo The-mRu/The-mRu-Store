@@ -8,7 +8,7 @@ from typing import Optional
 from backend.db.database import db
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
-from backend.api.ml_core import get_embedding_model
+from backend.api.ml_core import get_embedding
 
 router = APIRouter()
 
@@ -149,7 +149,7 @@ async def create_product(payload: ProductWrite):
         payload.name, category_name, payload.gender, payload.description, brand_name,
         warranty=payload.warranty, rating=None 
         )
-    embedding = get_embedding_model().encode(search_text).tolist()
+    embedding = await get_embedding(search_text)
 
     product = {
         "id": f"prod_custom_{uuid.uuid4().hex[:6]}",
@@ -193,7 +193,7 @@ async def update_product(product_id: str, payload: ProductWrite):
             payload.name, category_name, payload.gender, payload.description, brand_name,
             warranty=payload.warranty, rating=None 
             ) 
-    embedding = get_embedding_model().encode(search_text).tolist()
+    embedding = await get_embedding(search_text)
 
     update_data = {
         "name": payload.name,

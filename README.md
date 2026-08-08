@@ -280,6 +280,29 @@ If you skip these scripts, the app can still run, but chat quality and search co
 
 The embedding scripts now use OpenAI embeddings too, so they no longer require the local `sentence-transformers` / `torch` stack.
 
+
+## Deployment
+
+The app is deployed on Render with MongoDB Atlas.
+
+| Service | URL |
+|---------|-----|
+| Storefront | [https://the-mru-store.onrender.com](https://the-mru-store.onrender.com) |
+| API Docs | [https://mru-store-api.onrender.com/docs](https://mru-store-api.onrender.com/docs) |
+
+**Free tier note:** Services sleep after 15 minutes of inactivity. First request may take 30-50 seconds to wake up.
+
+### Environment Variables (Render)
+
+| Variable | Service |
+|----------|---------|
+| `MONGO_URI` | Both |
+| `OPENAI_API_KEY` | API |
+| `API_BASE_URL` | API (`http://localhost:10000`) |
+| `FASTAPI_BASE_URL` | Frontend (`https://mru-store-api.onrender.com`) |
+| `SECRET_KEY` | Frontend |
+| `DEBUG` | Frontend (`False`) |
+| `ALLOWED_HOSTS` | Frontend |
 ## Notes
 
 - The backend is the source of truth for APIs and AI orchestration.

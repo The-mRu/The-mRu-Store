@@ -1,26 +1,26 @@
 <!-- Floating Chatbot Widget -->
 <div id="chatbot-container" class="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans transition-colors duration-300">
-    
+
     <!-- Chat Window (Hidden by default) -->
-    <div id="chatbot-window" class="hidden w-[90vw] sm:w-80 md:w-96 h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 flex-col overflow-hidden transition-all transform origin-bottom-right">
-        
+    <div id="chatbot-window" class="hidden w-[90vw] sm:w-80 md:w-96 h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 flex-col overflow-hidden transition-all transform origin-bottom-right">
+
         <!-- Header -->
-        <div class="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 flex justify-between items-center shadow-md z-10">
+        <div class="bg-teal-600 dark:bg-teal-500 text-white p-4 flex justify-between items-center z-10">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm shadow-inner">
+                <div class="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                 </div>
                 <div>
-                    <h3 class="font-bold text-base leading-tight">AI Assistant</h3>
-                    <p class="text-xs text-blue-100">Online & ready to help</p>
+                    <h3 class="font-display font-semibold text-base leading-tight">AI Assistant</h3>
+                    <p class="text-xs text-teal-50">Online & ready to help</p>
                 </div>
             </div>
             <!-- Close Button -->
-            <button onclick="toggleChat()" class="text-blue-100 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10">
+            <button onclick="toggleChat()" class="text-teal-50 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
-        
+
         <!-- Message Area -->
         <div id="chatbot-messages" class="flex-grow p-5 overflow-y-auto flex flex-col gap-4 bg-gray-50 dark:bg-gray-900 text-sm scroll-smooth">
             <!-- Initial AI Greeting (Will be overwritten if history exists) -->
@@ -28,21 +28,21 @@
                 Hello! I am your mRu-store AI assistant. How can I help you find the perfect product today?
             </div>
         </div>
-        
+
         <!-- Input Area -->
         <div class="p-4 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 z-10">
             <form id="chatbot-form" class="flex gap-2" onsubmit="handleChatSubmit(event)">
-                <input type="text" id="chatbot-input" placeholder="Ask me anything..." required 
-                    class="flex-grow px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white placeholder-gray-400 shadow-inner transition-all text-sm">
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl transition-all transform hover:-translate-y-0.5 shadow-md flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
+                <input type="text" id="chatbot-input" placeholder="Ask me anything..." required
+                    class="flex-grow px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-transparent focus:ring-2 focus:ring-teal-500 text-gray-900 dark:text-white placeholder-gray-400 transition-all text-sm">
+                <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-xl transition-all transform hover:-translate-y-0.5 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 dark:focus:ring-offset-gray-800">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                 </button>
             </form>
         </div>
     </div>
-    
-    <!-- Floating Chat Button (Added ID: chatbot-trigger) -->
-    <button id="chatbot-trigger" onclick="toggleChat()" class="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-all transform hover:-translate-y-1 flex items-center justify-center border-4 border-white dark:border-gray-800 group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+
+    <!-- Floating Chat Button -->
+    <button id="chatbot-trigger" onclick="toggleChat()" class="bg-teal-600 hover:bg-teal-700 text-white p-4 rounded-full shadow-xl transition-all transform hover:-translate-y-1 flex items-center justify-center border-4 border-white dark:border-gray-900 group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
         <svg class="w-7 h-7 transform group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
     </button>
 </div>
@@ -71,7 +71,7 @@
         if (savedUserId && savedUserId !== currentUserId) {
             sessionStorage.removeItem('chatHistory');
         }
-        
+
         sessionStorage.setItem('chatUserId', currentUserId);
 
         const savedHistory = sessionStorage.getItem('chatHistory');
@@ -80,16 +80,14 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Check if chat was left open on previous page load
-        const isChatOpen = sessionStorage.getItem('chatOpen');
-        if (isChatOpen === 'true') {
-            const chatWindow = document.getElementById('chatbot-window');
-            const chatTrigger = document.getElementById('chatbot-trigger');
-            
-            chatWindow.classList.remove('hidden');
-            chatWindow.classList.add('flex');
-            chatTrigger.classList.add('hidden'); // Ensure trigger stays hidden across pages
-        }
+        // FIX: chat always starts minimized on a fresh page load.
+        // The conversation itself is preserved (via chatHistory above) — only the
+        // open/closed window state no longer carries over between pages.
+        const chatWindow = document.getElementById('chatbot-window');
+        const chatTrigger = document.getElementById('chatbot-trigger');
+        chatWindow.classList.add('hidden');
+        chatWindow.classList.remove('flex');
+        chatTrigger.classList.remove('hidden');
     });
 
     function saveChatHistory() {
@@ -97,26 +95,22 @@
         sessionStorage.setItem('chatHistory', chatMessages.innerHTML);
     }
 
-    // UPDATED Toggle Logic: Hides the round button when chat opens
     function toggleChat() {
         const chatWindow = document.getElementById('chatbot-window');
         const chatTrigger = document.getElementById('chatbot-trigger');
-        
+
         if (chatWindow.classList.contains('hidden')) {
             // Open the chat
             chatWindow.classList.remove('hidden');
             chatWindow.classList.add('flex');
-            chatTrigger.classList.add('hidden'); // Hide the round button
-            
+            chatTrigger.classList.add('hidden');
+
             document.getElementById('chatbot-input').focus();
-            sessionStorage.setItem('chatOpen', 'true');
         } else {
             // Close the chat
             chatWindow.classList.add('hidden');
             chatWindow.classList.remove('flex');
-            chatTrigger.classList.remove('hidden'); // Show the round button
-            
-            sessionStorage.setItem('chatOpen', 'false');
+            chatTrigger.classList.remove('hidden');
         }
     }
 
@@ -129,20 +123,20 @@
         const chatMessages = document.getElementById('chatbot-messages');
 
         const userMsgHTML = `
-            <div class="bg-blue-600 text-white p-3.5 rounded-2xl rounded-tr-sm self-end max-w-[85%] shadow-md animate-fade-in-up">
+            <div class="bg-teal-600 text-white p-3.5 rounded-2xl rounded-tr-sm self-end max-w-[85%] animate-fade-in-up">
                 ${message}
             </div>
         `;
         chatMessages.insertAdjacentHTML('beforeend', userMsgHTML);
         inputField.value = '';
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        
-        saveChatHistory(); 
+
+        saveChatHistory();
 
         const typingIndicatorID = 'typing-' + Date.now();
         const typingHTML = `
             <div id="${typingIndicatorID}" class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 p-3 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm text-xs font-medium flex items-center gap-2 animate-fade-in-up">
-                <svg class="w-3 h-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                <svg class="w-3 h-3 animate-spin text-teal-500" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -154,7 +148,7 @@
 
         try {
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
-            
+
             const response = await fetch('/api/chat/', {
                 method: 'POST',
                 headers: {
@@ -163,19 +157,19 @@
                 },
                 body: JSON.stringify({ message: message })
             });
-            
+
             const data = await response.json();
             document.getElementById(typingIndicatorID).remove();
 
             let aiText = "Sorry, I couldn't process that.";
             if (typeof data === 'string') {
-                aiText = data; 
+                aiText = data;
             } else if (data && typeof data === 'object') {
                 aiText = data.response || data.reply || data.message || data.text || data.answer || JSON.stringify(data);
             }
 
             // === Markdown rendering for AI messages ===
-            const formattedAI = marked.parse(aiText); // Convert Markdown to HTML
+            const formattedAI = marked.parse(aiText);
 
             const aiMsgHTML = `
                 <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 p-3.5 rounded-2xl rounded-tl-sm self-start max-w-[85%] shadow-sm animate-fade-in-up">
@@ -184,8 +178,8 @@
             `;
             chatMessages.insertAdjacentHTML('beforeend', aiMsgHTML);
             chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            saveChatHistory(); 
+
+            saveChatHistory();
 
         } catch (error) {
             document.getElementById(typingIndicatorID).remove();
